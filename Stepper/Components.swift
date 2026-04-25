@@ -83,3 +83,28 @@ struct HubStatCard: View {
         }.frame(maxWidth: .infinity).padding(.vertical, 10).background(.ultraThinMaterial).cornerRadius(15).overlay(RoundedRectangle(cornerRadius: 15).stroke(AnyShapeStyle(AppTheme.glassGradient), lineWidth: 1))
     }
 }
+struct AnimatedBackgroundView: View {
+    var isActive: Bool
+    @State private var a = false
+    
+    var body: some View {
+        ZStack {
+            AppTheme.bgDark.ignoresSafeArea()
+            Color.white.opacity(0.01).blendMode(.overlay).ignoresSafeArea()
+            Circle().fill(AppTheme.accentRed.opacity(0.15)).blur(radius: 60).frame(width: 300).offset(x: a ? 100 : -100, y: a ? -150 : 100)
+            Circle().fill(AppTheme.accentBlue.opacity(0.2)).blur(radius: 80).frame(width: 400).offset(x: a ? -100 : 150, y: a ? 200 : -50)
+            Circle().fill(AppTheme.accentPurple.opacity(0.15)).blur(radius: 100).frame(width: 250).offset(x: a ? 50 : -50, y: a ? 50 : -200)
+        }
+        .drawingGroup()
+        .onAppear {
+            if isActive {
+                withAnimation(.easeInOut(duration: 10).repeatForever(autoreverses: true)) { a.toggle() }
+            }
+        }
+        .onChange(of: isActive) { old, newActive in
+            if newActive {
+                withAnimation(.easeInOut(duration: 10).repeatForever(autoreverses: true)) { a.toggle() }
+            }
+        }
+    }
+}
