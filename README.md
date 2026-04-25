@@ -1,4 +1,4 @@
-# footstepeRR: Cyberpunk Fitness Ecosystem ⚡️🦾
+# footstepeR: Cyberpunk Fitness Ecosystem 
 
 ![iOS](https://img.shields.io/badge/iOS-17.0+-blue.svg?style=for-the-badge&logo=apple)
 ![Swift](https://img.shields.io/badge/Swift-5.10-orange.svg?style=for-the-badge&logo=swift)
@@ -6,7 +6,7 @@
 ![MapKit](https://img.shields.io/badge/Maps-MapKit_%26_CoreLocation-blue.svg?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Work_In_Progress-yellow.svg?style=for-the-badge)
 
-**footstepeRR** is a state-of-the-art, fully native iOS fitness tracker and pedometer designed with a deep Cyberpunk/Glassmorphism aesthetic. It transcends traditional step-counting by turning your daily activity into an RPG-like experience with neural implants, cyber-clubs, GPS anomalies, and a built-in AI Coach.
+**footstepeR** is a state-of-the-art, fully native iOS fitness tracker and pedometer designed with a deep Cyberpunk/Glassmorphism aesthetic. It transcends traditional step-counting by turning your daily activity into an RPG-like experience with neural implants, cyber-clubs, GPS anomalies, and a built-in AI Coach.
 
 > [!]  
 > 🚧 **PROJECT IS IN ACTIVE DEVELOPMENT (WORK IN PROGRESS)** 🚧
