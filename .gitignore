@@ -1,0 +1,45 @@
+# Xcode
+build/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+DerivedData/
+*.hmap
+*.ipa
+*.xcuserstate
+
+# Swift Package Manager
+.build/
+
+# CocoaPods
+Pods/
+
+# macOS
+.DS_Store
+
+Secrets.swift
+
+Secrets.swift
+
+copy.sh
+
+copy-swift.sh
+
+main.sh
+
+q.py
+script.py
+names.json
+
+# Google Cloud Vertex AI Credentials
+vertex_credentials.json
+
+*.sh
