@@ -34,17 +34,38 @@ enum TooltipType {
 class SpeechManager: ObservableObject {
     @Published var recognizedText = ""
     @Published var isRecording = false
-    
+    /// Set when the user denied either Speech Recognition or Microphone
+    /// permission so the chat UI can surface a graceful alert with a
+    /// deep-link into Settings instead of silently doing nothing.
+    @Published var permissionDenied = false
+
     private var speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "ru-RU"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
 
     func startRecording() {
-        // Просим разрешение у пользователя (сработает 1 раз)
-        SFSpeechRecognizer.requestAuthorization { status in
-            if status == .authorized {
-                DispatchQueue.main.async { self.setupRecording() }
+        SFSpeechRecognizer.requestAuthorization { [weak self] status in
+            guard let self else { return }
+            switch status {
+            case .authorized:
+                AVAudioApplication.requestRecordPermission { granted in
+                    DispatchQueue.main.async {
+                        if granted {
+                            self.setupRecording()
+                        } else {
+                            self.permissionDenied = true
+                        }
+                    }
+                }
+            case .denied, .restricted:
+                DispatchQueue.main.async { self.permissionDenied = true }
+            case .notDetermined:
+                // The system did not present the prompt this run; bail out
+                // quietly so the next tap retries.
+                break
+            @unknown default:
+                DispatchQueue.main.async { self.permissionDenied = true }
             }
         }
     }
@@ -145,13 +166,25 @@ struct MainScreenView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 25) {
                         // Верхний бар (TopTabsView) удален!
-                        
+
+                        // Soft-warning if Health/Location aren't connected
+                        // yet. Banners disappear automatically once the
+                        // permission flips to authorized.
+                        permissionBanners
+
                         SemiCircleStepView(steps: steps, goal: goal)
                             .scrollTransition { content, phase in
                                 content.scaleEffect(phase.isIdentity ? 1 : 0.9).opacity(phase.isIdentity ? 1 : 0.5)
                             }
                         
-                        StatsRowView(steps: steps, activeTooltip: $activeTooltip)
+                        StatsRowView(
+                            steps: steps,
+                            kcal: health.todayActiveKilocalories,
+                            distanceMeters: health.todayDistanceMeters,
+                            exerciseMinutes: health.todayExerciseMinutes,
+                            goal: goal,
+                            activeTooltip: $activeTooltip
+                        )
                             .modifier(ScrollParallaxModifier())
                             .scrollTransition { content, phase in
                                 content.offset(y: phase.isIdentity ? 0 : 20).opacity(phase.isIdentity ? 1 : 0)
@@ -204,6 +237,40 @@ struct MainScreenView: View {
             AIChatView(initialMessage: currentAIPrompt)
         }
     }
+
+    /// Empty-state warnings shown above the main step ring when the user
+    /// hasn't granted HealthKit / Location yet. Tapping the CTA either
+    /// re-prompts (notDetermined) or deep-links into iOS Settings (denied).
+    @ViewBuilder
+    private var permissionBanners: some View {
+        VStack(spacing: 12) {
+            if !health.isAvailable {
+                // iPad / Simulator iPad target. Surface, but no CTA.
+                EmptyView()
+            } else if health.todaySteps == nil && !health.hasRequestedAuthorization {
+                PermissionBanner(kind: .healthNotAsked) {
+                    Task { await health.requestAuthorization() }
+                }
+            } else if health.todaySteps == nil && health.hasRequestedAuthorization {
+                PermissionBanner(kind: .healthDenied) {
+                    openAppSettings()
+                }
+            }
+
+            switch locManager.authorizationStatus {
+            case .notDetermined:
+                PermissionBanner(kind: .locationNotAsked) {
+                    locManager.requestAuth()
+                }
+            case .denied, .restricted:
+                PermissionBanner(kind: .locationDenied) {
+                    openAppSettings()
+                }
+            default:
+                EmptyView()
+            }
+        }
+    }
 }
 
 // MARK: - ОБНОВЛЕННЫЕ КОМПОНЕНТЫ (БЕЗ ЛИШНИХ ОГНЕЙ)
@@ -236,12 +303,60 @@ struct SemiCircleStepView: View {
 }
 
 struct StatsRowView: View {
-    var steps: Double; @Binding var activeTooltip: TooltipType?
+    let steps: Double
+    let kcal: Double?
+    let distanceMeters: Double?
+    let exerciseMinutes: Double?
+    let goal: Double
+    @Binding var activeTooltip: TooltipType?
+
+    /// Calories: prefer HealthKit's active-energy reading; fall back to a
+    /// rough "~0.045 kcal per step" heuristic so the card never reads 0
+    /// for users who haven't granted Health (or are on Simulator).
+    private var caloriesValue: Int {
+        if let kcal { return Int(kcal.rounded()) }
+        return Int((steps * 0.045).rounded())
+    }
+
+    /// Distance: prefer HealthKit metres -> km; fall back to step-based
+    /// estimate (~0.00076 km per step ~ 76 cm stride).
+    private var distanceKm: Double {
+        if let distanceMeters { return distanceMeters / 1000 }
+        return steps * 0.00076
+    }
+
+    /// Active minutes: prefer Apple Exercise minutes; otherwise show 0.
+    /// We deliberately do NOT fabricate a value when HealthKit is empty.
+    private var minutesValue: Int { Int((exerciseMinutes ?? 0).rounded()) }
+
+    private var stepProgress: Double { min(steps / max(goal, 1), 1.0) }
+
     var body: some View {
         HStack(spacing: 12) {
-            ColorfulStatCard(title: "Калории", value: "\(Int(steps * 0.045))", unit: "ккал", icon: "flame.fill", color: AppTheme.accentOrange, progress: 0.6) { activeTooltip = .calories }
-            ColorfulStatCard(title: "Время", value: "45", unit: "мин", icon: "timer", color: AppTheme.accentCyan, progress: 0.4) { activeTooltip = .time }
-            ColorfulStatCard(title: "Путь", value: String(format: "%.1f", steps * 0.00076), unit: "км", icon: "figure.walk", color: AppTheme.neonGreen, progress: 0.8) { activeTooltip = .distance }
+            ColorfulStatCard(
+                title: "Калории",
+                value: "\(caloriesValue)",
+                unit: "ккал",
+                icon: "flame.fill",
+                color: AppTheme.accentOrange,
+                progress: stepProgress
+            ) { activeTooltip = .calories }
+            ColorfulStatCard(
+                title: "Время",
+                value: "\(minutesValue)",
+                unit: "мин",
+                icon: "timer",
+                color: AppTheme.accentCyan,
+                progress: min(Double(minutesValue) / 30.0, 1.0)
+            ) { activeTooltip = .time }
+            ColorfulStatCard(
+                title: "Путь",
+                value: String(format: "%.1f", distanceKm),
+                unit: "км",
+                icon: "figure.walk",
+                color: AppTheme.neonGreen,
+                progress: min(distanceKm / 8.0, 1.0)
+            ) { activeTooltip = .distance }
         }
     }
 }
@@ -1601,11 +1716,21 @@ struct AIChatView: View {
     
     @State private var selectedTab = "Чат"
     @State private var inputText = ""
-    @State private var messages: [ChatMessage] = []
-    
+    @State private var coach = AICoachService.shared
+
     @StateObject private var speech = SpeechManager() // Микрофон чата
-    
+
     let tabs = ["Чат", "История"]
+
+    // Propagate the stable `Turn.id` (assigned once in AICoachService)
+    // so SwiftUI's ForEach diff-by-id works and `scrollTo(last.id)` lines
+    // up with the IDs the ForEach actually rendered. Generating a fresh
+    // `UUID()` on every access here would break both.
+    private var messages: [ChatMessage] {
+        coach.transcript.map { turn in
+            ChatMessage(id: turn.id, text: turn.text, isUser: turn.role == .user)
+        }
+    }
     
     var body: some View {
         ZStack {
@@ -1634,9 +1759,27 @@ struct AIChatView: View {
                         ScrollView {
                             LazyVStack(spacing: 15) {
                                 ForEach(messages) { msg in ChatBubble(message: msg) }
+                                if coach.isThinking {
+                                    HStack(spacing: 6) {
+                                        ForEach(0..<3, id: \.self) { i in
+                                            Circle().fill(AppTheme.accentCyan).frame(width: 7, height: 7)
+                                                .opacity(0.55)
+                                                .scaleEffect(coach.isThinking ? 1.0 : 0.6)
+                                                .animation(.easeInOut(duration: 0.6).repeatForever().delay(Double(i) * 0.18), value: coach.isThinking)
+                                        }
+                                    }
+                                    .padding(14)
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 8)
+                                    .id("__thinking")
+                                }
                             }.padding()
                         }
-                        .onChange(of: messages.count) { _, _ in if let last = messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } } }
+                        .onChange(of: coach.transcript.count) { _, _ in if let last = messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } } }
+                        .onChange(of: coach.isThinking) { _, thinking in
+                            if thinking { withAnimation { proxy.scrollTo("__thinking", anchor: .bottom) } }
+                        }
                     }
                     
                     // Обновленное Поле ввода с МИКРОФОНОМ
@@ -1690,23 +1833,34 @@ struct AIChatView: View {
         }
         .onAppear {
             if !initialMessage.isEmpty {
-                messages.append(ChatMessage(text: initialMessage, isUser: true))
+                let starter = initialMessage
                 initialMessage = ""
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { messages.append(ChatMessage(text: "Анализирую ваш запрос... Как кибер-тренер, я готов помочь.", isUser: false)) }
-            } else if messages.isEmpty {
-                messages.append(ChatMessage(text: "Привет! Я твой AI-помощник. Составим план тренировок?", isUser: false))
+                Task { await coach.ask(starter) }
             }
+        }
+        .alert(
+            Text("ai.coach.mic.denied.title"),
+            isPresented: $speech.permissionDenied
+        ) {
+            Button(role: .cancel) { } label: { Text("common.cancel") }
+            Button {
+                openAppSettings()
+            } label: {
+                Text("permission.cta.openSettings")
+            }
+        } message: {
+            Text("ai.coach.mic.denied.message")
         }
     }
     func sendMessage() {
-        guard !inputText.isEmpty else { return }
-        messages.append(ChatMessage(text: inputText, isUser: true))
+        let prompt = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return }
         inputText = ""
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { messages.append(ChatMessage(text: "Принято. Вношу коррективы в вашу программу.", isUser: false)) }
+        Task { await coach.ask(prompt) }
     }
 }
 
-struct ChatMessage: Identifiable { let id = UUID(); let text: String; let isUser: Bool }
+struct ChatMessage: Identifiable { let id: UUID; let text: String; let isUser: Bool }
 struct ChatBubble: View {
     let message: ChatMessage
     var body: some View {
