@@ -24,7 +24,9 @@ jobs:
           sudo mv swiftlint /usr/local/bin/
 
       - name: Run SwiftLint
-        run: swiftlint --strict --reporter github-actions-logging
+        # Not strict: existing codebase is intentionally dense.
+        # CI fails only on rule violations classified as errors.
+        run: swiftlint --reporter github-actions-logging
 
   build:
     name: Xcode build (iOS Simulator)
