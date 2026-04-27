@@ -68,9 +68,10 @@ final class SubscriptionManager {
         transactionListener = Self.listenForTransactions(target: self)
     }
 
-    deinit {
-        transactionListener?.cancel()
-    }
+    // No `deinit { transactionListener?.cancel() }` — `deinit` runs on a
+    // nonisolated context and can't touch our main-actor stored property.
+    // The listener task captures `self` weakly, so when the manager is
+    // deallocated the loop exits on its next iteration.
 
     // MARK: - Public API
 
@@ -180,7 +181,7 @@ final class SubscriptionManager {
         }
     }
 
-    private func handleVerified(_ result: VerificationResult<Transaction>) throws -> Transaction {
+    private func handleVerified(_ result: VerificationResult<Transaction>) async throws -> Transaction {
         try checkVerified(result)
     }
 
