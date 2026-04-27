@@ -116,18 +116,20 @@ class SearchDebouncer: ObservableObject {
 
 
 // MARK: - MAIN SCREEN
+// MARK: - MAIN SCREEN
 struct MainScreenView: View {
     @Environment(\.scenePhase) var scenePhase
     @StateObject private var locManager = LocationManager()
     @StateObject private var debouncer = SearchDebouncer()
     
-    @State private var steps: Double = 6432
+    // ПОДКЛЮЧАЕМ НАШ НОВЫЙ МЕНЕДЖЕР 🧠
+    @StateObject private var kinetics = NeuroKineticsManager()
+    
     @AppStorage("dailyStepGoal") private var goal: Double = 10000
     @State private var activeSheet: ActiveSheet? = nil
     @State private var isAppActive = true
     @State private var activeTooltip: TooltipType? = nil
     
-    // Новые стейты для ИИ Чата
     @State private var showAIChat = false
     @State private var currentAIPrompt = ""
     
@@ -140,14 +142,21 @@ struct MainScreenView: View {
                 
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 25) {
-                        // Верхний бар (TopTabsView) удален!
                         
-                        SemiCircleStepView(steps: steps, goal: goal)
+                        // 1. ПЕРЕДАЕМ РЕАЛЬНЫЕ ШАГИ В КОЛЬЦО
+                        SemiCircleStepView(steps: kinetics.todaySteps, goal: goal)
                             .scrollTransition { content, phase in
                                 content.scaleEffect(phase.isIdentity ? 1 : 0.9).opacity(phase.isIdentity ? 1 : 0.5)
                             }
                         
-                        StatsRowView(steps: steps, activeTooltip: $activeTooltip)
+                        // 2. ПЕРЕДАЕМ РЕАЛЬНУЮ СТАТИСТИКУ В ПЛАШКИ
+                        StatsRowView(
+                            steps: kinetics.todaySteps,
+                            calories: kinetics.todayCalories,
+                            distance: kinetics.todayDistance,
+                            time: kinetics.todayExerciseTime,
+                            activeTooltip: $activeTooltip
+                        )
                             .modifier(ScrollParallaxModifier())
                             .scrollTransition { content, phase in
                                 content.offset(y: phase.isIdentity ? 0 : 20).opacity(phase.isIdentity ? 1 : 0)
@@ -165,8 +174,12 @@ struct MainScreenView: View {
                         .scrollTransition { content, phase in content.scaleEffect(phase.isIdentity ? 1 : 0.95) }
                         
                         ActionGrid(activeSheet: $activeSheet)
-                        
-                        HorizontalHealthWidgets(activeSheet: $activeSheet)
+                        HorizontalHealthWidgets(
+                                                    activeSheet: $activeSheet,
+                                                    bpm: kinetics.latestBPM,
+                                                    sleep: kinetics.sleepDurationText,
+                                                    recovery: kinetics.recoveryScore
+                                                )
                         
                         Spacer().frame(height: 100) // Отступ под прозрачный TabBar
                     }
@@ -176,7 +189,8 @@ struct MainScreenView: View {
             }
             
             if let tooltip = activeTooltip {
-                TooltipCloudView(tooltip: tooltip, steps: steps, onClose: {
+                // ИСПРАВЛЕНА ПЕРЕДАЧА ШАГОВ СЮДА:
+                TooltipCloudView(tooltip: tooltip, steps: kinetics.todaySteps, onClose: {
                     triggerImpact(style: .light)
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         activeTooltip = nil
@@ -188,7 +202,11 @@ struct MainScreenView: View {
         .onChange(of: scenePhase) { oldPhase, newPhase in
             isAppActive = (newPhase == .active)
         }
-        .sheet(item: $activeSheet) { sheet in SheetRouter(sheet: sheet, locManager: locManager) }
+        .onAppear {
+            // Запускаем сбор данных при открытии экрана
+            kinetics.bootKineticsCore()
+        }
+        .sheet(item: $activeSheet) { sheet in SheetRouter(sheet: sheet, locManager: locManager, kinetics: kinetics) }
         // Открываем чат на весь экран
         .fullScreenCover(isPresented: $showAIChat) {
             AIChatView(initialMessage: currentAIPrompt)
@@ -226,16 +244,43 @@ struct SemiCircleStepView: View {
 }
 
 struct StatsRowView: View {
-    var steps: Double; @Binding var activeTooltip: TooltipType?
+    var steps: Double
+    var calories: Double
+    var distance: Double
+    var time: Double // <-- НОВЫЙ ПАРАМЕТР
+    @Binding var activeTooltip: TooltipType?
+    
     var body: some View {
         HStack(spacing: 12) {
-            ColorfulStatCard(title: "Калории", value: "\(Int(steps * 0.045))", unit: "ккал", icon: "flame.fill", color: AppTheme.accentOrange, progress: 0.6) { activeTooltip = .calories }
-            ColorfulStatCard(title: "Время", value: "45", unit: "мин", icon: "timer", color: AppTheme.accentCyan, progress: 0.4) { activeTooltip = .time }
-            ColorfulStatCard(title: "Путь", value: String(format: "%.1f", steps * 0.00076), unit: "км", icon: "figure.walk", color: AppTheme.neonGreen, progress: 0.8) { activeTooltip = .distance }
+            ColorfulStatCard(
+                title: "Калории",
+                value: "\(Int(calories))",
+                unit: "ккал",
+                icon: "flame.fill",
+                color: AppTheme.accentOrange,
+                progress: min(calories / 1000.0, 1.0)
+            ) { activeTooltip = .calories }
+            
+            ColorfulStatCard(
+                title: "Время",
+                value: "\(Int(time))", // <-- РЕАЛЬНЫЕ МИНУТЫ АКТИВНОСТИ ИЗ ФИТНЕСА
+                unit: "мин",
+                icon: "timer",
+                color: AppTheme.accentCyan,
+                progress: min(time / 60.0, 1.0) // Прогресс до 60 минут
+            ) { activeTooltip = .time }
+            
+            ColorfulStatCard(
+                title: "Путь",
+                value: String(format: "%.1f", distance),
+                unit: "км",
+                icon: "figure.walk",
+                color: AppTheme.neonGreen,
+                progress: min(distance / 10.0, 1.0)
+            ) { activeTooltip = .distance }
         }
     }
 }
-
 struct ColorfulStatCard: View {
     let title: String; let value: String; let unit: String; let icon: String; let color: Color; let progress: Double; let onLongPress: () -> Void
     @State private var isHovered = false; @State private var breathe = false
@@ -356,20 +401,24 @@ struct ActionButton: View {
 
 struct HorizontalHealthWidgets: View {
     @Binding var activeSheet: ActiveSheet?
+    
+    var bpm: Int
+    var sleep: String
+    var recovery: Int
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
-            Text("Log Health Data").font(.title3.bold()).foregroundColor(.white).padding(.horizontal) // Убран огонек
+            Text("Log Health Data").font(.title3.bold()).foregroundColor(.white).padding(.horizontal)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 15) {
-                    WidgetCard(icon: "heart.fill", title: "Blood", sub: "132 BPM", color: AppTheme.accentRed) { activeSheet = .blood }
-                    WidgetCard(icon: "moon.zzz.fill", title: "Sleep", sub: "7h 12m", color: AppTheme.accentPurple) { activeSheet = .sleep }
-                    WidgetCard(icon: "battery.100.bolt", title: "Recover", sub: "98% Ready", color: AppTheme.neonGreen) { activeSheet = .recovery }
+                    WidgetCard(icon: "heart.fill", title: "Blood", sub: "\(bpm > 0 ? "\(bpm)" : "--") BPM", color: AppTheme.accentRed) { activeSheet = .blood }
+                    WidgetCard(icon: "moon.zzz.fill", title: "Sleep", sub: sleep, color: AppTheme.accentPurple) { activeSheet = .sleep }
+                    WidgetCard(icon: "battery.100.bolt", title: "Recover", sub: "\(recovery)% Ready", color: AppTheme.neonGreen) { activeSheet = .recovery }
                 }.padding(.horizontal)
             }.scrollTransition(.interactive, axis: .horizontal) { content, phase in content.scaleEffect(phase.isIdentity ? 1 : 0.9).opacity(phase.isIdentity ? 1 : 0.7) }
         }.padding(.horizontal, -16)
     }
 }
-
 struct WidgetCard: View {
     let icon: String; let title: String; let sub: String; let color: Color; let action: () -> Void
     var body: some View {
@@ -769,12 +818,10 @@ struct MarathonCard: View {
 }
 struct BloodHealthSheetView: View {
     @Environment(\.dismiss) var dismiss
-    
     @State private var pulse = false
-    @State private var liveBPM = 132
     
-    // Таймер для имитации живого сердцебиения
-    let heartTimer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+    // Передаем сюда реальный пульс!
+    var realBPM: Int
     
     var body: some View {
         ZStack {
@@ -800,7 +847,7 @@ struct BloodHealthSheetView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
                 
-                // MARK: Главный пульсатор (Исправлен баг с квадратом)
+                // MARK: Главный пульсатор
                 ZStack {
                     // Расходящиеся волны
                     ForEach(0..<3, id: \.self) { i in
@@ -825,9 +872,9 @@ struct BloodHealthSheetView: View {
                         .scaleEffect(pulse ? 1.05 : 0.95)
                         .animation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true), value: pulse)
                     
-                    // Текст внутри
+                    // Текст внутри (ИСПОЛЬЗУЕТ РЕАЛЬНЫЕ ДАННЫЕ)
                     VStack(spacing: -5) {
-                        Text("\(liveBPM)")
+                        Text(realBPM > 0 ? "\(realBPM)" : "--")
                             .font(.system(size: 55, weight: .black, design: .rounded))
                             .foregroundColor(.white)
                             .contentTransition(.numericText()) // Красивая анимация смены цифр
@@ -914,13 +961,7 @@ struct BloodHealthSheetView: View {
             pulse = true
             triggerImpact(style: .rigid)
         }
-        // Имитация живого сердцебиения
-        .onReceive(heartTimer) { _ in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                liveBPM = Int.random(in: 130...135)
-                triggerImpact(style: .soft) // Легкая пульсация телефона
-            }
-        }
+        // ТАЙМЕР ИМИТАЦИИ УБРАН
     }
 }
 
@@ -1789,13 +1830,15 @@ struct TooltipCloudView: View {
 struct SheetRouter: View {
     let sheet: ActiveSheet
     @ObservedObject var locManager: LocationManager
+    @ObservedObject var kinetics: NeuroKineticsManager
+    
     var body: some View {
         Group {
             switch sheet {
             case .goal: GoalSheetView()
-            case .map: MapTrackerSheet(locManager: locManager) // <-- Теперь тут всегда реальная карта
+            case .map: MapTrackerSheet(locManager: locManager)
             case .marathon: MarathonSheetView()
-            case .blood: BloodHealthSheetView()
+            case .blood: BloodHealthSheetView(realBPM: kinetics.latestBPM)
             case .cardioPro: CardioProSheetView()
             case .sleep: SleepAISheetView()
             case .recovery: RecoverySheetView()
