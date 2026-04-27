@@ -34,18 +34,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
+      - name: Select Xcode (26.x — project requires Xcode 26+)
         run: |
           ls /Applications | grep -i xcode || true
-          sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer || \
-          sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer || \
-          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer || \
-          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          # Pick the newest Xcode 26.x available on the runner. The project was
+          # created with Xcode 26.3 (CreatedOnToolsVersion = 26.3); any 26.x
+          # works, 16.x does not because we use iOS 26 Toolchain APIs.
+          for xc in \
+            /Applications/Xcode_26.1.1.app \
+            /Applications/Xcode_26.1.app \
+            /Applications/Xcode_26.0.1.app \
+            /Applications/Xcode_26.0.app \
+            /Applications/Xcode.app; do
+            if [ -d "$xc" ]; then
+              sudo xcode-select -s "$xc/Contents/Developer"
+              echo "Using $xc"
+              break
+            fi
+          done
           xcodebuild -version
           swift --version
 
-      - name: Show available simulators
-        run: xcrun simctl list devices available | head -50
+      - name: Pick iOS Simulator destination
+        id: dest
+        run: |
+          # First iPhone simulator with an iOS 26+ runtime, falling back to
+          # any available iPhone simulator.
+          DEVICE=$(xcrun simctl list devices available \
+            | awk '/-- iOS 26/,/-- iOS [^2]/' \
+            | grep -E "iPhone .*\([A-F0-9-]+\)" \
+            | head -1 \
+            | sed -E 's/^[[:space:]]*([^(]+)\(.*$/\1/' \
+            | sed -E 's/[[:space:]]+$//')
+          if [ -z "$DEVICE" ]; then
+            DEVICE=$(xcrun simctl list devices available \
+              | grep -E "iPhone .*\([A-F0-9-]+\)" \
+              | head -1 \
+              | sed -E 's/^[[:space:]]*([^(]+)\(.*$/\1/' \
+              | sed -E 's/[[:space:]]+$//')
+          fi
+          if [ -z "$DEVICE" ]; then
+            echo "::error::no iOS Simulator iPhone available on runner"
+            exit 1
+          fi
+          DEST="platform=iOS Simulator,name=$DEVICE"
+          echo "destination=$DEST" >> "$GITHUB_OUTPUT"
+          echo "Using destination: $DEST"
 
       - name: Build for iOS Simulator (no signing)
         run: |
@@ -54,14 +88,13 @@ jobs:
             -project Stepper.xcodeproj \
             -scheme Stepper \
             -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination "${{ steps.dest.outputs.destination }}" \
             -skipPackagePluginValidation \
             -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            ONLY_ACTIVE_ARCH=NO \
             build 2>&1 | tee xcodebuild.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
