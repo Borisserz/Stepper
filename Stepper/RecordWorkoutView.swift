@@ -119,15 +119,15 @@ struct RecordWorkoutView: View {
                 .shadow(color: AppTheme.accentCyan.opacity(0.5), radius: 12)
 
             HStack(spacing: 24) {
-                StatBlock(
+                RecordStatBlock(
                     title: Text("workout.record.distance"),
                     value: settings.distanceUnit.format(meters: recorder.distanceMeters)
                 )
-                StatBlock(
+                RecordStatBlock(
                     title: Text("workout.record.pace"),
                     value: paceText
                 )
-                StatBlock(
+                RecordStatBlock(
                     title: Text("workout.record.calories"),
                     value: "\(Int(recorder.caloriesKcal)) kcal"
                 )
@@ -245,9 +245,13 @@ struct RecordWorkoutView: View {
     }
 
     private func finishRecording() async {
-        let saved = await recorder.stop(savingTo: modelContext)
+        // `persistLocally` returns a session even if `context.save()` fails,
+        // so we can't rely on a nil return to detect persistence problems.
+        // Surface the recorder's last error directly instead.
+        recorder.lastError = nil
+        _ = await recorder.stop(savingTo: modelContext)
         routeCoordinates.removeAll()
-        if saved == nil, let err = recorder.lastError {
+        if let err = recorder.lastError {
             saveError = err
             return
         }
@@ -266,7 +270,7 @@ struct RecordWorkoutView: View {
     }
 }
 
-private struct StatBlock: View {
+private struct RecordStatBlock: View {
     let title: Text
     let value: String
 
