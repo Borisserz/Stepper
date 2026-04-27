@@ -309,8 +309,6 @@ private struct PremiumCTA: View {
 
     @State private var shimmerOffset: CGFloat = -200
     @State private var buttonPulse = false
-    @State private var timeRemaining = 899
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var selectedPlan: PremiumPlan? {
         plans.first(where: { $0.productID == selectedProductID })
@@ -320,9 +318,13 @@ private struct PremiumCTA: View {
         VStack(spacing: 0) {
             Spacer()
             VStack(spacing: 16) {
+                // The previous "Портал закроется через 14:59" countdown was a
+                // fake urgency timer — App Review Guideline 4.5.6 ("misleading
+                // sales pressure") is an automatic reject for that. Replaced
+                // with a non-deceptive trust line.
                 HStack(spacing: 6) {
-                    Image(systemName: "timer").foregroundStyle(.cyberCyan)
-                    Text("ПОРТАЛ ЗАКРОЕТСЯ ЧЕРЕЗ: \(String(format: "%02d:%02d", timeRemaining / 60, timeRemaining % 60))")
+                    Image(systemName: "lock.shield.fill").foregroundStyle(.cyberCyan)
+                    Text("paywall.trust.cancelAnytime")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundStyle(.cyberCyan)
                 }
@@ -330,7 +332,6 @@ private struct PremiumCTA: View {
                 .background(Color.cyberCyan.opacity(0.15))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cyberCyan.opacity(0.5), lineWidth: 1))
-                .onReceive(timer) { _ in if timeRemaining > 0 { timeRemaining -= 1 } }
 
                 Button(action: onActivate) {
                     ZStack {

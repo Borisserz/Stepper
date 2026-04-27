@@ -44,6 +44,18 @@ final class HealthKitManager {
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
+    /// True only when **every** metric we queried came back nil. HealthKit
+    /// hides read-authorization status by design, so this is the strongest
+    /// proxy we have for "the user denied access" — a single non-nil value
+    /// proves that at least one read succeeded and the rest are simply
+    /// genuinely zero today (e.g. early morning).
+    var allMetricsUnavailable: Bool {
+        todaySteps == nil &&
+        todayDistanceMeters == nil &&
+        todayActiveKilocalories == nil &&
+        todayExerciseMinutes == nil
+    }
+
     private var readTypes: Set<HKObjectType> {
         var types: Set<HKObjectType> = []
         if let steps = HKObjectType.quantityType(forIdentifier: .stepCount) { types.insert(steps) }
