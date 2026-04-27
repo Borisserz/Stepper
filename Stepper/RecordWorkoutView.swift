@@ -70,7 +70,10 @@ struct RecordWorkoutView: View {
         .alert(Text("workout.record.finish.title"),
                isPresented: $showFinishConfirm) {
             Button(role: .cancel) { } label: { Text("common.cancel") }
-            Button(role: .destructive) {
+            // Default (blue) role: this button SAVES the workout to
+            // History + Apple Health. .destructive would render it red
+            // and read as "delete", which contradicts the alert message.
+            Button {
                 Task { await finishRecording() }
             } label: { Text("workout.record.finish.confirm") }
         } message: {
