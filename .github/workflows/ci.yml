@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: SwiftLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: |
+          curl -sLO https://github.com/realm/SwiftLint/releases/download/0.57.0/swiftlint_linux.zip
+          unzip swiftlint_linux.zip
+          sudo mv swiftlint /usr/local/bin/
+
+      - name: Run SwiftLint
+        run: swiftlint --strict --reporter github-actions-logging
+
+  build:
+    name: Xcode build (iOS Simulator)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          ls /Applications | grep -i xcode || true
+          sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer || \
+          sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer || \
+          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer || \
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+          swift --version
+
+      - name: Show available simulators
+        run: xcrun simctl list devices available | head -50
+
+      - name: Build for iOS Simulator (no signing)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Stepper.xcodeproj \
+            -scheme Stepper \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            ONLY_ACTIVE_ARCH=NO \
+            build | xcpretty || (echo "::error::xcodebuild failed"; exit 1)
+
+      - name: Validate Privacy Manifest
+        run: |
+          test -f Stepper/PrivacyInfo.xcprivacy
+          /usr/libexec/PlistBuddy -c "Print" Stepper/PrivacyInfo.xcprivacy > /dev/null
+          echo "PrivacyInfo.xcprivacy is valid"
+
+      - name: Validate AppIcon assets
+        run: |
+          test -f Stepper/Assets.xcassets/AppIcon.appiconset/AppIcon-Light.png
+          test -f Stepper/Assets.xcassets/AppIcon.appiconset/AppIcon-Dark.png
+          test -f Stepper/Assets.xcassets/AppIcon.appiconset/AppIcon-Tinted.png
+          file Stepper/Assets.xcassets/AppIcon.appiconset/*.png
