@@ -13,7 +13,6 @@ import AuthenticationServices
 import SwiftUI
 
 struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(AccountManager.self) private var account
     @Environment(SettingsStore.self) private var settings
     @Environment(HealthKitManager.self) private var health
@@ -22,6 +21,7 @@ struct SettingsView: View {
     @State private var isDeleting = false
     @State private var legalSheet: LegalSheetKind?
     @State private var showRestorePlaceholder = false
+    @State private var showHistory = false
 
     var body: some View {
         NavigationStack {
@@ -32,6 +32,7 @@ struct SettingsView: View {
                     subscriptionSection
                     preferencesSection
                     healthSection
+                    workoutsSection
                     legalSection
                     aboutSection
                 }
@@ -39,18 +40,11 @@ struct SettingsView: View {
             }
             .navigationTitle(Text("settings.title"))
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                    }
-                    .accessibilityLabel(Text("common.cancel"))
-                }
-            }
             .sheet(item: $legalSheet) { kind in
                 LegalSheet(kind: kind)
+            }
+            .sheet(isPresented: $showHistory) {
+                WorkoutHistoryView()
             }
             .alert(Text("settings.account.delete.title"),
                    isPresented: $showDeleteConfirm) {
@@ -208,6 +202,16 @@ struct SettingsView: View {
         }
     }
 
+    private var workoutsSection: some View {
+        Section("settings.workouts.title") {
+            Button {
+                showHistory = true
+            } label: {
+                Label("settings.workouts.history", systemImage: "list.bullet.clipboard")
+            }
+        }
+    }
+
     private var legalSection: some View {
         Section("settings.legal.title") {
             Button { legalSheet = .privacy } label: {
@@ -251,11 +255,14 @@ struct SettingsView: View {
         }
     }
 
+    /// Clears local data and signs the user out. `RootRouterView` watches
+    /// `account.isSignedIn` and automatically routes back to the onboarding
+    /// flow once it flips to `false`, so we don't need to dismiss anything
+    /// from this view.
     private func performDelete() async {
         isDeleting = true
         defer { isDeleting = false }
         await account.deleteAccount()
-        dismiss()
     }
 }
 

@@ -7,6 +7,7 @@ struct footstepeRRApp: App {
     @State private var account = AccountManager()
     @State private var settings = SettingsStore()
     @State private var health = HealthKitManager()
+    @State private var recorder = WorkoutRecorder()
     let modelContainer: ModelContainer
 
     init() {
@@ -24,11 +25,17 @@ struct footstepeRRApp: App {
 
             modelContainer = try ModelContainer(
                 for: AppUser.self, StepLog.self, AIRoute.self, BiomechanicData.self,
+                WorkoutSession.self, WorkoutLocation.self,
                 configurations: config
             )
         } catch {
             let config = ModelConfiguration(isStoredInMemoryOnly: true)
-            modelContainer = try! ModelContainer(for: AppUser.self, StepLog.self, AIRoute.self, BiomechanicData.self, configurations: config)
+            // swiftlint:disable:next force_try
+            modelContainer = try! ModelContainer(
+                for: AppUser.self, StepLog.self, AIRoute.self, BiomechanicData.self,
+                WorkoutSession.self, WorkoutLocation.self,
+                configurations: config
+            )
         }
     }
 
@@ -39,6 +46,7 @@ struct footstepeRRApp: App {
                 .environment(account)
                 .environment(settings)
                 .environment(health)
+                .environment(recorder)
                 .modelContainer(modelContainer)
                 .preferredColorScheme(.dark)
                 #if os(macOS)
@@ -60,6 +68,7 @@ enum AppFlowState {
 }
 
 struct RootRouterView: View {
+    @Environment(AccountManager.self) private var account
     // Состояние сбрасывается при каждом запуске, поэтому экраны будут показываться всегда
     @State private var flowState: AppFlowState = .auth
 
@@ -102,6 +111,16 @@ struct RootRouterView: View {
                         .tabItem { Label("tab.settings", systemImage: "gearshape.fill") }
                 }
                 .transition(.opacity)
+            }
+        }
+        .onChange(of: account.isSignedIn) { _, signedIn in
+            // When the user signs out or deletes their account from Settings,
+            // SettingsView's `dismiss()` is a no-op inside a TabView. Watch the
+            // auth state at the root and bounce the user back to onboarding.
+            if !signedIn && flowState != .auth {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    flowState = .auth
+                }
             }
         }
     }

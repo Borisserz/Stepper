@@ -159,6 +159,167 @@
         }
       }
     },
+    "common.ok" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "ОК" } }
+      }
+    },
+    "settings.workouts.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Workouts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Тренировки" } }
+      }
+    },
+    "settings.workouts.history" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Workout history" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История тренировок" } }
+      }
+    },
+    "workout.record.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Record workout" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Запись тренировки" } }
+      }
+    },
+    "workout.record.start" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Start" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Старт" } }
+      }
+    },
+    "workout.record.pause" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pause" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пауза" } }
+      }
+    },
+    "workout.record.resume" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Resume" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Продолжить" } }
+      }
+    },
+    "workout.record.finish" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Finish" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Завершить" } }
+      }
+    },
+    "workout.record.distance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Distance" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Дистанция" } }
+      }
+    },
+    "workout.record.pace" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pace" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Темп" } }
+      }
+    },
+    "workout.record.calories" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Calories" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Калории" } }
+      }
+    },
+    "workout.record.duration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Duration" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Время" } }
+      }
+    },
+    "workout.record.discard.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Discard workout?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отменить тренировку?" } }
+      }
+    },
+    "workout.record.discard.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your progress so far won't be saved." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Текущий прогресс не сохранится." } }
+      }
+    },
+    "workout.record.discard.confirm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Discard" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отменить" } }
+      }
+    },
+    "workout.record.error.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't save workout" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось сохранить тренировку" } }
+      }
+    },
+    "workout.history.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "History" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История" } }
+      }
+    },
+    "workout.history.empty.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No workouts yet" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Тренировок пока нет" } }
+      }
+    },
+    "workout.history.empty.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tap REC on the GPS tab to record your first workout." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нажми REC во вкладке GPS, чтобы записать первую тренировку." } }
+      }
+    },
+    "workout.detail.delete.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete workout?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Удалить тренировку?" } }
+      }
+    },
+    "workout.detail.delete.confirm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Удалить" } }
+      }
+    },
+    "unit.minPerKm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "/km" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "/км" } }
+      }
+    },
+    "unit.minPerMi" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "/mi" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "/ми" } }
+      }
+    },
     "common.continue" : {
       "extractionState" : "manual",
       "localizations" : {

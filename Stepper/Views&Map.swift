@@ -28,7 +28,8 @@ struct GPSTabView: View {
     
     @State private var showWeatherSheet = false
     @State private var showNeuralCore = false
-    
+    @State private var showRecordSheet = false
+
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -94,6 +95,7 @@ struct GPSTabView: View {
         .fullScreenCover(isPresented: $showNeuralCore) { AICoreHubView() }
         .fullScreenCover(isPresented: $routeManager.isHubPresented) { RoutesAndChallengesHub() }
         .sheet(isPresented: $showCompletionSheet, onDismiss: { resetAfterCompletion() }) { RouteCompletionSheet(calories: caloriesBurned, combo: comboMultiplier) }
+        .fullScreenCover(isPresented: $showRecordSheet) { RecordWorkoutView() }
     }
     
     @ViewBuilder private var mapLayer: some View {
@@ -135,6 +137,17 @@ struct GPSTabView: View {
                     HStack {
                         Button(action: { triggerImpact(); isSatelliteMode.toggle() }) { Image(systemName: isSatelliteMode ? "map.fill" : "globe.americas.fill").font(.title3).foregroundColor(.white).padding(10).background(.ultraThinMaterial).clipShape(Circle()).overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)).shadow(color: AppTheme.accentCyan.opacity(0.5), radius: 5) }.buttonStyle(BouncyButton())
                         Button(action: { triggerImpact(); let center = locManager.location?.coordinate ?? CLLocationCoordinate2D(latitude: 53.9, longitude: 27.5); withAnimation { cameraPosition = .camera(MapCamera(centerCoordinate: center, distance: 800, heading: 0, pitch: 0)) } }) { Image(systemName: "location.fill").font(.title3).foregroundColor(.white).padding(10).background(.ultraThinMaterial).clipShape(Circle()).overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)) }.buttonStyle(BouncyButton())
+                        Button(action: { triggerImpact(style: .heavy); showRecordSheet = true }) {
+                            HStack(spacing: 6) {
+                                Circle().fill(AppTheme.accentRed).frame(width: 10, height: 10).shadow(color: AppTheme.accentRed, radius: 6).opacity(pulse ? 1.0 : 0.5)
+                                Text("REC").font(.system(size: 13, weight: .heavy, design: .rounded)).foregroundColor(.white)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(AppTheme.accentRed.opacity(0.7), lineWidth: 1))
+                            .shadow(color: AppTheme.accentRed.opacity(0.5), radius: 6)
+                        }.buttonStyle(BouncyButton()).accessibilityLabel(Text("workout.record.title"))
                     }
                 }
                 Spacer()
