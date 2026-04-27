@@ -653,6 +653,55 @@
     "settings.subscription.restore.placeholder" : {
 
     },
+    "settings.subscription.restore.restored" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Premium restored. Welcome back." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Premium восстановлен. С возвращением." } }
+      }
+    },
+    "settings.subscription.restore.alreadyPremium" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You already have an active premium subscription." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Premium уже активен." } }
+      }
+    },
+    "settings.subscription.restore.none" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No previous purchases found for this Apple ID." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Покупки для этого Apple ID не найдены." } }
+      }
+    },
+    "settings.subscription.restore.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t restore. Check your connection and try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось восстановить. Проверьте соединение и повторите." } }
+      }
+    },
+    "settings.subscription.status.active" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Premium active" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Premium активен" } }
+      }
+    },
+    "settings.subscription.status.inactive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Free plan" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Бесплатный тариф" } }
+      }
+    },
+    "paywall.error.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Purchase issue" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ошибка покупки" } }
+      }
+    },
     "settings.subscription.title" : {
 
     },

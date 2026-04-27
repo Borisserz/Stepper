@@ -5,31 +5,97 @@
 //
 //  Created by Boris Serzhanovich on 27.04.26.
 //
+//  Note: prices/plans are no longer hardcoded. They flow from
+//  `SubscriptionManager.products` (StoreKit 2) so the same screen renders
+//  whatever pricing tier we configure in App Store Connect. The cyberpunk
+//  copy / badges / colours are layered on top via `PaywallPlanPresenter`.
+//
 
 import SwiftUI
 import Combine
+import StoreKit
 
 struct PremiumPlan: Identifiable, Equatable {
     let id = UUID(); let name: String; let price: String; let duration: String; let badge: String?
+    /// `nil` means "no real StoreKit product backs this plan" — purely for previews / fallback.
+    let productID: String?
 }
 
 struct PremiumFeature: Identifiable, Equatable {
     let id = UUID(); let title: String; let subtitle: String; let icon: String; let colors: [Color]; let detail: String
 }
 
-struct PremiumPaywallScreen: View {
-    var onComplete: () -> Void
-    
-    @State private var selectedPlan: String = "Цикл (Год)"
-    @State private var selectedFeature: PremiumFeature? = nil
-    @State private var showWelcomeOverlay: Bool = false
-    
-    let plans: [PremiumPlan] = [
-        PremiumPlan(name: "Микро (Нед)", price: "290 ₽", duration: "/ нед", badge: nil),
-        PremiumPlan(name: "Макро (Мес)", price: "990 ₽", duration: "/ мес", badge: "БАЗОВЫЙ УЗЕЛ"),
-        PremiumPlan(name: "Цикл (Год)", price: "5 990 ₽", duration: "/ год", badge: "МАКС. ЭФФЕКТИВНОСТЬ (-60%)")
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+/// Maps a StoreKit `Product` into the cyberpunk-styled `PremiumPlan` row.
+/// Centralised so we never duplicate "monthly = Макро / yearly = Цикл" magic.
+enum PaywallPlanPresenter {
+    static func plan(for product: Product) -> PremiumPlan {
+        switch product.id {
+        case SubscriptionManager.ProductID.monthly.rawValue:
+            return PremiumPlan(name: "Макро (Мес)",
+                               price: product.displayPrice,
+                               duration: "/ мес",
+                               badge: "БАЗОВЫЙ УЗЕЛ",
+                               productID: product.id)
+        case SubscriptionManager.ProductID.yearly.rawValue:
+            return PremiumPlan(name: "Цикл (Год)",
+                               price: product.displayPrice,
+                               duration: "/ год",
+                               badge: "МАКС. ЭФФЕКТИВНОСТЬ (-33%)",
+                               productID: product.id)
+        case SubscriptionManager.ProductID.lifetime.rawValue:
+            return PremiumPlan(name: "Бесконечность",
+                               price: product.displayPrice,
+                               duration: "разово",
+                               badge: "ВЕЧНЫЙ ДОСТУП",
+                               productID: product.id)
+        default:
+            return PremiumPlan(name: product.displayName,
+                               price: product.displayPrice,
+                               duration: "",
+                               badge: nil,
+                               productID: product.id)
+        }
+    }
+
+    /// Plans to show while StoreKit is still loading. Same shape as the
+    /// real ones so layout doesn't jump when products arrive.
+    static let placeholders: [PremiumPlan] = [
+        PremiumPlan(name: "Макро (Мес)", price: "—", duration: "/ мес", badge: "БАЗОВЫЙ УЗЕЛ", productID: nil),
+        PremiumPlan(name: "Цикл (Год)", price: "—", duration: "/ год", badge: "МАКС. ЭФФЕКТИВНОСТЬ", productID: nil),
+        PremiumPlan(name: "Бесконечность", price: "—", duration: "разово", badge: "ВЕЧНЫЙ ДОСТУП", productID: nil)
     ]
-    
+}
+
+struct PremiumPaywallScreen: View {
+    @Environment(SubscriptionManager.self) private var subscriptions
+    var onComplete: () -> Void
+
+    @State private var selectedProductID: String?
+    @State private var selectedFeature: PremiumFeature?
+    @State private var showWelcomeOverlay: Bool = false
+    @State private var purchaseError: String?
+
+    /// Computed plan list — bridges StoreKit -> existing cyberpunk UI.
+    private var plans: [PremiumPlan] {
+        guard !subscriptions.products.isEmpty else { return PaywallPlanPresenter.placeholders }
+        return subscriptions.products.map(PaywallPlanPresenter.plan)
+    }
+
+    /// Default selection prefers yearly (best value).
+    private var resolvedSelection: String {
+        if let pinned = selectedProductID,
+           plans.contains(where: { $0.productID == pinned }) {
+            return pinned
+        }
+        return plans.first(where: { $0.productID == SubscriptionManager.ProductID.yearly.rawValue })?.productID
+            ?? plans.first?.productID
+            ?? ""
+    }
+
     var body: some View {
         ZStack {
             CyberBackgroundView()
@@ -45,7 +111,10 @@ struct PremiumPaywallScreen: View {
                         FeatureCarouselView(selectedFeature: $selectedFeature)
                         CyberBentoGrid()
                         ProsConsCyberView()
-                        PricingPlansView(plans: plans, selectedPlan: $selectedPlan)
+                        PricingPlansView(plans: plans, selectedProductID: Binding(
+                            get: { resolvedSelection },
+                            set: { selectedProductID = $0 }
+                        ))
                         SafeTrialTimelineView()
                         Spacer().frame(height: 180)
                     }
@@ -53,26 +122,75 @@ struct PremiumPaywallScreen: View {
                 }
             }
             .frame(maxWidth: 430)
-            
-            PremiumCTA(selectedPlan: selectedPlan, plans: plans) {
-                CyberHapticManager.playMediumImpact()
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { showWelcomeOverlay = true }
-            }
-            
+
+            PremiumCTA(
+                selectedProductID: resolvedSelection,
+                plans: plans,
+                isProcessing: subscriptions.isProcessing,
+                onActivate: { Task { await runPurchase() } },
+                onRestore: { Task { await runRestore() } }
+            )
+
             if let feature = selectedFeature {
                 FeatureDetailOverlay(feature: feature) {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { selectedFeature = nil; CyberHapticManager.playLightImpact() }
                 }.transition(.scale(scale: 0.8).combined(with: .opacity)).zIndex(100)
             }
-            
+
             if showWelcomeOverlay {
                 WelcomePremiumOverlay {
                     CyberHapticManager.playHeavyImpact()
-                    // Передача управления в главное приложение!
                     onComplete()
                 }.transition(.scale(scale: 0.8).combined(with: .opacity)).zIndex(200)
             }
         }
+        .alert("paywall.error.title",
+               isPresented: Binding(
+                get: { purchaseError != nil },
+                set: { if !$0 { purchaseError = nil } }
+               )) {
+            Button("common.ok", role: .cancel) { purchaseError = nil }
+        } message: {
+            Text(purchaseError ?? "")
+        }
+        .task { await subscriptions.loadProducts() }
+        .onChange(of: subscriptions.isPremium) { _, isPremium in
+            // Caught e.g. when restore reveals an existing entitlement.
+            if isPremium {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { showWelcomeOverlay = true }
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func runPurchase() async {
+        guard let pid = (selectedProductID ?? resolvedSelection).nilIfEmpty,
+              let product = subscriptions.products.first(where: { $0.id == pid }) else {
+            purchaseError = NSLocalizedString("paywall.error.noProduct",
+                                              value: "Pricing is still loading. Try again in a moment.",
+                                              comment: "")
+            return
+        }
+        do {
+            CyberHapticManager.playMediumImpact()
+            let transaction = try await subscriptions.purchase(product)
+            if transaction != nil {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { showWelcomeOverlay = true }
+            }
+            // userCancelled / pending — no-op, user stays on paywall.
+        } catch {
+            purchaseError = error.localizedDescription
+        }
+    }
+
+    private func runRestore() async {
+        await subscriptions.restore()
+        if let err = subscriptions.lastError {
+            purchaseError = err
+        }
+        // If `subscriptions.isPremium` flipped to true, the onChange handler
+        // above shows the welcome overlay automatically.
     }
 }
 
@@ -158,8 +276,21 @@ private struct ProsConsCyberView: View {
 private struct ComparisonRowCyber: View { let icon: String; let color: Color; let text: String; var body: some View { HStack(alignment: .top, spacing: 8) { Image(systemName: icon).font(.system(size: 12, weight: .bold)).foregroundStyle(color).padding(.top, 2); Text(text).font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true).lineLimit(2) } } }
 
 private struct PricingPlansView: View {
-    let plans: [PremiumPlan]; @Binding var selectedPlan: String
-    var body: some View { VStack(spacing: 16) { ForEach(plans) { plan in PlanRowCyberView(plan: plan, isSelected: selectedPlan == plan.name) { withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { selectedPlan = plan.name; CyberHapticManager.playSelection() } } } }.padding(.horizontal, 20) }
+    let plans: [PremiumPlan]
+    @Binding var selectedProductID: String
+    var body: some View {
+        VStack(spacing: 16) {
+            ForEach(plans) { plan in
+                PlanRowCyberView(plan: plan, isSelected: selectedProductID == (plan.productID ?? "")) {
+                    guard let pid = plan.productID else { return }
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                        selectedProductID = pid
+                        CyberHapticManager.playSelection()
+                    }
+                }
+            }
+        }.padding(.horizontal, 20)
+    }
 }
 private struct PlanRowCyberView: View {
     let plan: PremiumPlan; let isSelected: Bool; let action: () -> Void
@@ -167,19 +298,81 @@ private struct PlanRowCyberView: View {
 }
 
 private struct PremiumCTA: View {
-    let selectedPlan: String; let plans: [PremiumPlan]; let onActivate: () -> Void
-    @State private var shimmerOffset: CGFloat = -200; @State private var buttonPulse = false; @State private var timeRemaining = 899
+    let selectedProductID: String
+    let plans: [PremiumPlan]
+    let isProcessing: Bool
+    let onActivate: () -> Void
+    let onRestore: () -> Void
+
+    @State private var shimmerOffset: CGFloat = -200
+    @State private var buttonPulse = false
+    @State private var timeRemaining = 899
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    
+
+    private var selectedPlan: PremiumPlan? {
+        plans.first(where: { $0.productID == selectedProductID })
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
             VStack(spacing: 16) {
-                HStack(spacing: 6) { Image(systemName: "timer").foregroundStyle(.cyberCyan); Text("ПОРТАЛ ЗАКРОЕТСЯ ЧЕРЕЗ: \(String(format: "%02d:%02d", timeRemaining / 60, timeRemaining % 60))").font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundStyle(.cyberCyan) }.padding(.horizontal, 16).padding(.vertical, 8).background(Color.cyberCyan.opacity(0.15)).clipShape(RoundedRectangle(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cyberCyan.opacity(0.5), lineWidth: 1)).onReceive(timer) { _ in if timeRemaining > 0 { timeRemaining -= 1 } }
-                Button(action: onActivate) { ZStack { LinearGradient(colors: [.cyberCyan, .cyberNeon], startPoint: .topLeading, endPoint: .bottomTrailing); LinearGradient(colors: [.clear, .white.opacity(0.8), .clear], startPoint: .leading, endPoint: .trailing).rotationEffect(.degrees(30)).offset(x: shimmerOffset); Text("ИНИЦИАЛИЗИРОВАТЬ").font(.system(size: 17, weight: .black, design: .monospaced)).foregroundStyle(.black) }.frame(height: 64).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)).shadow(color: .cyberCyan.opacity(0.6), radius: buttonPulse ? 20 : 10, y: 5).scaleEffect(buttonPulse ? 1.03 : 1.0) }.buttonStyle(.plain).onAppear { withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) { shimmerOffset = 400 }; withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { buttonPulse = true } }
-                Text("Затем \(plans.first(where: { $0.name == selectedPlan })?.price ?? ""). Отмена в 1 клик.").font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(.gray)
-                HStack(spacing: 30) { Text("Директивы").underline(); Text("Восстановить").underline(); Text("Протокол").underline() }.font(.system(size: 11, weight: .bold, design: .monospaced)).foregroundStyle(.gray.opacity(0.7))
-            }.padding(.horizontal, 20).padding(.top, 40).padding(.bottom, 20).background(LinearGradient(colors: [.cyberDark.opacity(0), .cyberDark, .cyberDark], startPoint: .top, endPoint: .bottom))
+                HStack(spacing: 6) {
+                    Image(systemName: "timer").foregroundStyle(.cyberCyan)
+                    Text("ПОРТАЛ ЗАКРОЕТСЯ ЧЕРЕЗ: \(String(format: "%02d:%02d", timeRemaining / 60, timeRemaining % 60))")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.cyberCyan)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .background(Color.cyberCyan.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cyberCyan.opacity(0.5), lineWidth: 1))
+                .onReceive(timer) { _ in if timeRemaining > 0 { timeRemaining -= 1 } }
+
+                Button(action: onActivate) {
+                    ZStack {
+                        LinearGradient(colors: [.cyberCyan, .cyberNeon], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        LinearGradient(colors: [.clear, .white.opacity(0.8), .clear], startPoint: .leading, endPoint: .trailing)
+                            .rotationEffect(.degrees(30))
+                            .offset(x: shimmerOffset)
+                        if isProcessing {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(.black)
+                        } else {
+                            Text("ИНИЦИАЛИЗИРОВАТЬ")
+                                .font(.system(size: 17, weight: .black, design: .monospaced))
+                                .foregroundStyle(.black)
+                        }
+                    }
+                    .frame(height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: .cyberCyan.opacity(0.6), radius: buttonPulse ? 20 : 10, y: 5)
+                    .scaleEffect(buttonPulse ? 1.03 : 1.0)
+                }
+                .buttonStyle(.plain)
+                .disabled(isProcessing || selectedPlan?.productID == nil)
+                .onAppear {
+                    withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) { shimmerOffset = 400 }
+                    withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { buttonPulse = true }
+                }
+
+                Text("Затем \(selectedPlan?.price ?? "—"). Отмена в 1 клик.")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.gray)
+
+                HStack(spacing: 30) {
+                    Text("Директивы").underline()
+                    Button(action: onRestore) {
+                        Text("Восстановить").underline()
+                    }.disabled(isProcessing)
+                    Text("Протокол").underline()
+                }
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundStyle(.gray.opacity(0.7))
+            }
+            .padding(.horizontal, 20).padding(.top, 40).padding(.bottom, 20)
+            .background(LinearGradient(colors: [.cyberDark.opacity(0), .cyberDark, .cyberDark], startPoint: .top, endPoint: .bottom))
         }
     }
 }

@@ -16,12 +16,15 @@ struct SettingsView: View {
     @Environment(AccountManager.self) private var account
     @Environment(SettingsStore.self) private var settings
     @Environment(HealthKitManager.self) private var health
+    @Environment(SubscriptionManager.self) private var subscriptions
 
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
     @State private var legalSheet: LegalSheetKind?
-    @State private var showRestorePlaceholder = false
+    @State private var restoreState: RestoreState = .idle
     @State private var showHistory = false
+
+    fileprivate enum RestoreState { case idle, restoring, restored, alreadyPremium, noPurchases, failed(String) }
 
     var body: some View {
         NavigationStack {
@@ -58,10 +61,13 @@ struct SettingsView: View {
                 Text("settings.account.delete.message")
             }
             .alert(Text("settings.subscription.restore"),
-                   isPresented: $showRestorePlaceholder) {
-                Button("common.continue", role: .cancel) { }
+                   isPresented: Binding(
+                    get: { restoreState.shouldShowAlert },
+                    set: { if !$0 { restoreState = .idle } }
+                   )) {
+                Button("common.continue", role: .cancel) { restoreState = .idle }
             } message: {
-                Text("settings.subscription.restore.placeholder")
+                Text(restoreState.alertMessage)
             }
         }
         .preferredColorScheme(.dark)
@@ -119,15 +125,53 @@ struct SettingsView: View {
 
     private var subscriptionSection: some View {
         Section("settings.subscription.title") {
-            Button {
-                showRestorePlaceholder = true
-            } label: {
+            HStack {
                 Label {
-                    Text("settings.subscription.restore")
+                    Text(subscriptions.isPremium
+                         ? "settings.subscription.status.active"
+                         : "settings.subscription.status.inactive")
                 } icon: {
-                    Image(systemName: "arrow.clockwise")
+                    Image(systemName: subscriptions.isPremium ? "checkmark.seal.fill" : "seal")
+                        .foregroundStyle(subscriptions.isPremium ? .green : .secondary)
+                }
+                Spacer()
+            }
+            Button {
+                Task { await runRestore() }
+            } label: {
+                HStack {
+                    Label {
+                        Text("settings.subscription.restore")
+                    } icon: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    Spacer()
+                    if case .restoring = restoreState {
+                        ProgressView()
+                    }
                 }
             }
+            .disabled(restoreStateIsBusy)
+        }
+    }
+
+    private var restoreStateIsBusy: Bool {
+        if case .restoring = restoreState { return true }
+        return false
+    }
+
+    private func runRestore() async {
+        let wasPremium = subscriptions.isPremium
+        restoreState = .restoring
+        await subscriptions.restore()
+        if let err = subscriptions.lastError {
+            restoreState = .failed(err)
+            return
+        }
+        if subscriptions.isPremium {
+            restoreState = wasPremium ? .alreadyPremium : .restored
+        } else {
+            restoreState = .noPurchases
         }
     }
 
@@ -275,6 +319,25 @@ private struct LabeledRow: View {
             title
             Spacer()
             value.foregroundStyle(.secondary)
+        }
+    }
+}
+
+private extension SettingsView.RestoreState {
+    var shouldShowAlert: Bool {
+        switch self {
+        case .idle, .restoring: return false
+        default: return true
+        }
+    }
+
+    var alertMessage: LocalizedStringKey {
+        switch self {
+        case .restored:        return "settings.subscription.restore.restored"
+        case .alreadyPremium:  return "settings.subscription.restore.alreadyPremium"
+        case .noPurchases:     return "settings.subscription.restore.none"
+        case .failed:          return "settings.subscription.restore.failed"
+        case .idle, .restoring: return "settings.subscription.restore.placeholder"
         }
     }
 }

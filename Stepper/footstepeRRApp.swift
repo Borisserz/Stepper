@@ -8,6 +8,7 @@ struct footstepeRRApp: App {
     @State private var settings = SettingsStore()
     @State private var health = HealthKitManager()
     @State private var recorder = WorkoutRecorder()
+    @State private var subscriptions = SubscriptionManager()
     let modelContainer: ModelContainer
 
     init() {
@@ -51,7 +52,9 @@ struct footstepeRRApp: App {
                 .environment(settings)
                 .environment(health)
                 .environment(recorder)
+                .environment(subscriptions)
                 .modelContainer(modelContainer)
+                .task { await subscriptions.loadProducts() }
                 .preferredColorScheme(.dark)
                 #if os(macOS)
                 .frame(width: 393, height: 852)
