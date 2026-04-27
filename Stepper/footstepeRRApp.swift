@@ -4,6 +4,9 @@ import SwiftData
 @main
 struct footstepeRRApp: App {
     @StateObject private var routeManager = RouteManager()
+    @State private var account = AccountManager()
+    @State private var settings = SettingsStore()
+    @State private var health = HealthKitManager()
     let modelContainer: ModelContainer
 
     init() {
@@ -33,6 +36,9 @@ struct footstepeRRApp: App {
         WindowGroup {
             RootRouterView()
                 .environmentObject(routeManager)
+                .environment(account)
+                .environment(settings)
+                .environment(health)
                 .modelContainer(modelContainer)
                 .preferredColorScheme(.dark)
                 #if os(macOS)
@@ -87,10 +93,13 @@ struct RootRouterView: View {
             case .main:
                 TabView {
                     MainScreenView()
-                        .tabItem { Label("Сводка", systemImage: "flame.fill") }
-                    
+                        .tabItem { Label("tab.summary", systemImage: "flame.fill") }
+
                     GPSTabView()
-                        .tabItem { Label("GPS Трекинг", systemImage: "map.fill") }
+                        .tabItem { Label("tab.gps", systemImage: "map.fill") }
+
+                    SettingsView()
+                        .tabItem { Label("tab.settings", systemImage: "gearshape.fill") }
                 }
                 .transition(.opacity)
             }

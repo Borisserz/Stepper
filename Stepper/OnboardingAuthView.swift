@@ -5,37 +5,44 @@
 //  Created by Boris Serzhanovich on 27.04.26.
 //
 
+import AuthenticationServices
 import SwiftUI
 
 struct OnboardingAuthView: View {
     var onComplete: () -> Void
-    
+
     enum Step {
         case welcome
         case googleSignUp
     }
-    
+
     @Environment(\.openURL) var openURL
+    @Environment(AccountManager.self) private var account
     @State private var step: Step = .welcome
     @State private var showGuestModal = false
-    @State private var showAppleAlert = false
     @State private var showGoogleAlert = false
-    
+
     var body: some View {
         ZStack {
             Color(red: 0.02, green: 0.03, blue: 0.06).ignoresSafeArea()
             FloatingCyberShapes()
-            
+
             VStack {
                 switch step {
                 case .welcome:
                     WelcomeStepView(
-                        onAppleTap: { showAppleAlert = true },
+                        onAppleRequest: { request in
+                            account.configureAppleRequest(request)
+                        },
+                        onAppleCompletion: { result in
+                            account.handleAppleResult(result)
+                            if account.isSignedIn { onComplete() }
+                        },
                         onGoogleTap: { showGoogleAlert = true },
                         onGuestTap: { showGuestModal = true }
                     )
                     .transition(.move(edge: .trailing).combined(with: .opacity))
-                    
+
                 case .googleSignUp:
                     GoogleRegistrationView(
                         onBack: { withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) { step = .welcome } },
@@ -49,17 +56,20 @@ struct OnboardingAuthView: View {
         .animation(.easeInOut(duration: 0.28), value: step)
         .sheet(isPresented: $showGuestModal) {
             GuestWarningView(
-                onStayGuest: { showGuestModal = false; onComplete() },
-                onSignIn: { showGuestModal = false; onComplete() }
+                onStayGuest: {
+                    showGuestModal = false
+                    account.continueAsGuest()
+                    onComplete()
+                },
+                onSignIn: {
+                    showGuestModal = false
+                    onComplete()
+                }
             )
             .presentationDetents([.fraction(0.48), .medium])
             .presentationDragIndicator(.visible)
             .background(Color(red: 0.05, green: 0.06, blue: 0.1).ignoresSafeArea())
         }
-        .alert("Инициализация Apple", isPresented: $showAppleAlert) {
-            Button("Продолжить") { onComplete() }
-            Button("Отмена", role: .cancel) { }
-        } message: { Text("Точка входа Apple Sign In.") }
         .alert("Инициализация Google", isPresented: $showGoogleAlert) {
             Button("Войти") { step = .googleSignUp }
             Button("Отмена", role: .cancel) { }
@@ -107,15 +117,55 @@ private struct PolygonShape: Shape {
 }
 
 private struct WelcomeStepView: View {
-    let onAppleTap: () -> Void; let onGoogleTap: () -> Void; let onGuestTap: () -> Void; @State private var buttonPulse = false
+    let onAppleRequest: (ASAuthorizationAppleIDRequest) -> Void
+    let onAppleCompletion: (Result<ASAuthorization, Error>) -> Void
+    let onGoogleTap: () -> Void
+    let onGuestTap: () -> Void
+    @State private var buttonPulse = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Spacer(minLength: 8)
-            VStack(alignment: .leading, spacing: 10) { Text("Нейросеть\nТвоего\nДвижения.").font(.system(size: 52, weight: .black, design: .monospaced)).foregroundStyle(LinearGradient(colors: [.white, .cyan, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)).lineSpacing(-5).minimumScaleFactor(0.5); Text("Забудь про обычные шагомеры. Наш ИИ анализирует твою биомеханику, паттерны ходьбы и расход кинетической энергии. Синхронизируй тело с машиной.").font(.system(size: 15, weight: .medium, design: .rounded)).lineSpacing(3).foregroundStyle(.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true).minimumScaleFactor(0.8).padding(.trailing, 20) }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Нейросеть\nТвоего\nДвижения.")
+                    .font(.system(size: 52, weight: .black, design: .monospaced))
+                    .foregroundStyle(LinearGradient(colors: [.white, .cyan, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .lineSpacing(-5)
+                    .minimumScaleFactor(0.5)
+                Text("Забудь про обычные шагомеры. Наш ИИ анализирует твою биомеханику, паттерны ходьбы и расход кинетической энергии. Синхронизируй тело с машиной.")
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .lineSpacing(3)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .minimumScaleFactor(0.8)
+                    .padding(.trailing, 20)
+            }
             Spacer()
-            VStack(spacing: 12) { SignInButton(title: "Войти через Apple", subtitle: "Безопасный протокол", icon: "apple.logo", accent: Color.cyan, action: onAppleTap).scaleEffect(buttonPulse ? 1.02 : 1.0); SignInButton(title: "Войти через Google", subtitle: "Глобальная сеть", icon: "globe", accent: Color.purple, action: onGoogleTap); Button(action: onGuestTap) { Text("Локальный режим (Гость)").font(.system(size: 14, weight: .bold, design: .monospaced)).foregroundStyle(.white.opacity(0.7)).lineLimit(1).minimumScaleFactor(0.6).frame(maxWidth: .infinity).padding(.vertical, 16).background(Color.clear).overlay { RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.15), lineWidth: 1.5) } } }
+            VStack(spacing: 12) {
+                SignInWithAppleButton(.signIn, onRequest: onAppleRequest, onCompletion: onAppleCompletion)
+                    .signInWithAppleButtonStyle(.white)
+                    .frame(height: 50)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .scaleEffect(buttonPulse ? 1.02 : 1.0)
+                    .shadow(color: .cyan.opacity(0.2), radius: 10, x: 0, y: 5)
+
+                SignInButton(title: "Войти через Google", subtitle: "Глобальная сеть", icon: "globe", accent: Color.purple, action: onGoogleTap)
+                Button(action: onGuestTap) {
+                    Text("Локальный режим (Гость)")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.clear)
+                        .overlay { RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.15), lineWidth: 1.5) }
+                }
+            }
             .onAppear { withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) { buttonPulse = true } }
-        }.padding(.horizontal, 24).padding(.bottom, 30)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 30)
     }
 }
 
