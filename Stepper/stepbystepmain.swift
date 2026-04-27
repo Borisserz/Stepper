@@ -1607,9 +1607,13 @@ struct AIChatView: View {
 
     let tabs = ["Чат", "История"]
 
+    // Propagate the stable `Turn.id` (assigned once in AICoachService)
+    // so SwiftUI's ForEach diff-by-id works and `scrollTo(last.id)` lines
+    // up with the IDs the ForEach actually rendered. Generating a fresh
+    // `UUID()` on every access here would break both.
     private var messages: [ChatMessage] {
         coach.transcript.map { turn in
-            ChatMessage(text: turn.text, isUser: turn.role == .user)
+            ChatMessage(id: turn.id, text: turn.text, isUser: turn.role == .user)
         }
     }
     
@@ -1728,7 +1732,7 @@ struct AIChatView: View {
     }
 }
 
-struct ChatMessage: Identifiable { let id = UUID(); let text: String; let isUser: Bool }
+struct ChatMessage: Identifiable { let id: UUID; let text: String; let isUser: Bool }
 struct ChatBubble: View {
     let message: ChatMessage
     var body: some View {
