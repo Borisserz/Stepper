@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Firestore security rules for footstepeR.
+//
+// Layout:
+//   users/{userId}                    — top-level user document
+//     workouts/{sessionId}            — recorded GPS workouts
+//
+// Every read/write is scoped to the authenticated user. Anonymous reads
+// are forbidden; AppCheck enforcement is configured in the Firebase
+// Console (Build → App Check → Firestore → Enforce).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+
+      match /workouts/{sessionId} {
+        allow read, write: if request.auth != null
+                           && request.auth.uid == userId;
+      }
+    }
+
+    // Default-deny: anything else is unreachable.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -42,6 +42,12 @@ final class AccountManager {
     /// True while a Sign-in-with-Apple flow is in progress.
     private(set) var isAuthorizing: Bool = false
 
+    /// Raw nonce generated for the current SIWA challenge. Apple requires
+    /// `request.nonce = sha256(rawNonce)`; Firebase later wants the *raw*
+    /// nonce + identity token to verify the credential. We hold it here
+    /// between `configureAppleRequest` and `handleAppleResult`.
+    private var currentRawNonce: String?
+
     private let storageKey = "com.borisdev.Stepper.account"
     private let defaults: UserDefaults
 
@@ -61,6 +67,9 @@ final class AccountManager {
     /// email scope. Pass into `SignInWithAppleButton(onRequest:onCompletion:)`.
     func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
         request.requestedScopes = [.fullName, .email]
+        let raw = FirebaseAuthBridge.makeRandomNonce()
+        currentRawNonce = raw
+        request.nonce = FirebaseAuthBridge.sha256(raw)
         isAuthorizing = true
         lastError = nil
     }
@@ -85,11 +94,33 @@ final class AccountManager {
             )
             persist(snapshot)
 
+            // Bridge to Firebase Auth so the canonical UID powers Firestore
+            // security rules and FirebaseAI App Check. The local snapshot
+            // remains usable offline regardless of the Firebase outcome.
+            if let token = credential.identityToken,
+               let rawNonce = currentRawNonce {
+                Task { [weak self] in
+                    do {
+                        _ = try await FirebaseAuthBridge.signInWithApple(
+                            identityToken: token,
+                            rawNonce: rawNonce,
+                            fullName: credential.fullName
+                        )
+                    } catch {
+                        // Surface the error but keep the local session.
+                        self?.lastError = error.localizedDescription
+                    }
+                }
+            }
+            currentRawNonce = nil
+
         case .failure(let error as ASAuthorizationError) where error.code == .canceled:
             // User cancelled — not an error worth showing.
+            currentRawNonce = nil
             return
 
         case .failure(let error):
+            currentRawNonce = nil
             lastError = error.localizedDescription
         }
     }
@@ -112,6 +143,7 @@ final class AccountManager {
 
     /// Removes the locally stored account. The Settings screen calls this.
     func signOut() {
+        FirebaseAuthBridge.signOut()
         account = nil
         defaults.removeObject(forKey: storageKey)
         lastError = nil
@@ -124,8 +156,22 @@ final class AccountManager {
     /// - Returns: `true` when the deletion completed locally.
     @discardableResult
     func deleteAccount() async -> Bool {
-        // Best-effort: clear known per-user UserDefaults keys so opening the
-        // app post-deletion shows a fresh onboarding flow.
+        // 1. Wipe cloud copy of workouts so deletion is total per Apple
+        //    Guideline 5.1.1(v) ("all data must be deleted").
+        await FirestoreSyncService.shared.deleteAllForCurrentUser()
+
+        // 2. Delete the Firebase user record (revokes the SIWA refresh
+        //    token automatically when the session is fresh).
+        do {
+            try await FirebaseAuthBridge.deleteAccount()
+        } catch {
+            // Common case: token requires re-auth. The local session is
+            // still cleared so the UX is consistent.
+            lastError = error.localizedDescription
+        }
+
+        // 3. Best-effort: clear known per-user UserDefaults keys so opening
+        //    the app post-deletion shows a fresh onboarding flow.
         for key in ["dailyStepGoal", "userHeight", "userWeight", "userAge"] {
             defaults.removeObject(forKey: key)
         }

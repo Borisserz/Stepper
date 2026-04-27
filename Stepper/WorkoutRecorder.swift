@@ -130,8 +130,18 @@ final class WorkoutRecorder {
             saved = persistLocally(summary, in: context)
         }
 
-        await writeToHealth(summary)
+        // Run HealthKit write and Firestore push in parallel — both are
+        // best-effort and neither blocks the UI returning to idle.
+        async let healthWrite: Void = writeToHealth(summary)
+        async let cloudPush: Void = pushToFirestore(saved)
+        _ = await (healthWrite, cloudPush)
+
         return saved
+    }
+
+    private func pushToFirestore(_ session: WorkoutSession?) async {
+        guard let session else { return }
+        await FirestoreSyncService.shared.push(session)
     }
 
     /// Discards the in-progress recording without writing anything.

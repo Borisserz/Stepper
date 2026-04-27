@@ -166,6 +166,27 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "ОК" } }
       }
     },
+    "ai.coach.empty.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hey, I'm your AI Kinetic Core" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Привет, я твоё AI-Кинетическое Ядро" } }
+      }
+    },
+    "ai.coach.empty.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ask me about training, recovery, nutrition or running form. I keep context for the current session." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Спрашивай про тренировки, восстановление, питание и технику бега. Контекст сессии я помню." } }
+      }
+    },
+    "ai.coach.placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ask anything…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Задай вопрос…" } }
+      }
+    },
     "settings.workouts.title" : {
       "extractionState" : "manual",
       "localizations" : {
