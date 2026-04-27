@@ -123,35 +123,37 @@ def make_dark() -> Image.Image:
 
 
 def make_tinted() -> Image.Image:
-    """Grayscale variant; iOS auto-tints from this layer in tinted mode."""
-    base = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 255))
-    draw_grid(base, alpha=14)
+    """Monochrome variant on transparent background.
+
+    Apple Human Interface Guidelines: the tinted variant is a single-channel
+    grayscale + alpha image; the system colorises it using the user's tint.
+    Keep it RGBA — actool rejects a fully opaque tinted layer.
+    """
+    base = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
     draw_footprint(
         base,
         body_color=(255, 255, 255, 255),
-        glow_color=(255, 255, 255, 80),
+        glow_color=(255, 255, 255, 60),
     )
     return base
 
 
-def round_corners(img: Image.Image, radius: int = 0) -> Image.Image:
-    # App Store uploads must be square with no transparency.
-    # iOS applies the rounded mask itself.
-    return img.convert("RGB")
-
-
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    for name, factory in (
-        ("AppIcon-Light", make_light),
-        ("AppIcon-Dark", make_dark),
-        ("AppIcon-Tinted", make_tinted),
+    for name, factory, mode in (
+        ("AppIcon-Light", make_light, "RGB"),
+        ("AppIcon-Dark", make_dark, "RGB"),
+        ("AppIcon-Tinted", make_tinted, "RGBA"),
     ):
         img = factory()
-        img = round_corners(img)
+        if mode == "RGB":
+            # Light/Dark icons must be fully opaque.
+            img = img.convert("RGB")
+        else:
+            img = img.convert("RGBA")
         path = OUT / f"{name}.png"
         img.save(path, "PNG", optimize=True)
-        print(f"wrote {path}")
+        print(f"wrote {path} mode={img.mode}")
 
 
 if __name__ == "__main__":

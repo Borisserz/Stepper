@@ -62,7 +62,14 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
             ONLY_ACTIVE_ARCH=NO \
-            build | xcpretty || (echo "::error::xcodebuild failed"; exit 1)
+            build 2>&1 | tee xcodebuild.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "::group::Asset catalog & error excerpt"
+            grep -E "error:|warning:|actool|asset|catalog|AppIcon" xcodebuild.log | tail -100 || true
+            echo "::endgroup::"
+            exit "$status"
+          fi
 
       - name: Validate Privacy Manifest
         run: |
