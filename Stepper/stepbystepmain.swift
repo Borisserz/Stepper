@@ -213,12 +213,19 @@ struct MainScreenView: View {
             }
             
             if let tooltip = activeTooltip {
-                TooltipCloudView(tooltip: tooltip, steps: steps, onClose: {
-                    triggerImpact(style: .light)
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        activeTooltip = nil
+                TooltipCloudView(
+                    tooltip: tooltip,
+                    steps: steps,
+                    kcal: health.todayActiveKilocalories,
+                    distanceMeters: health.todayDistanceMeters,
+                    exerciseMinutes: health.todayExerciseMinutes,
+                    onClose: {
+                        triggerImpact(style: .light)
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                            activeTooltip = nil
+                        }
                     }
-                })
+                )
             }
         }
         .task {
@@ -241,17 +248,24 @@ struct MainScreenView: View {
     /// Empty-state warnings shown above the main step ring when the user
     /// hasn't granted HealthKit / Location yet. Tapping the CTA either
     /// re-prompts (notDetermined) or deep-links into iOS Settings (denied).
+    ///
+    /// HealthKit deliberately hides read-authorization status, so we can't
+    /// know for sure that the user said "no". To minimise false positives
+    /// (e.g. early-morning when no metric has been recorded yet) we only
+    /// surface the "denied" banner when **every** queried metric is nil.
+    /// If even one of steps / distance / energy / exercise is non-nil we
+    /// know permission flowed through, so we hide the banner.
     @ViewBuilder
     private var permissionBanners: some View {
         VStack(spacing: 12) {
             if !health.isAvailable {
                 // iPad / Simulator iPad target. Surface, but no CTA.
                 EmptyView()
-            } else if health.todaySteps == nil && !health.hasRequestedAuthorization {
+            } else if !health.hasRequestedAuthorization {
                 PermissionBanner(kind: .healthNotAsked) {
                     Task { await health.requestAuthorization() }
                 }
-            } else if health.todaySteps == nil && health.hasRequestedAuthorization {
+            } else if health.allMetricsUnavailable {
                 PermissionBanner(kind: .healthDenied) {
                     openAppSettings()
                 }
@@ -1861,35 +1875,62 @@ struct AIChatView: View {
 }
 
 struct ChatMessage: Identifiable { let id: UUID; let text: String; let isUser: Bool }
+/// Terminal-style chat bubble. The user's reply is a clean neon-green
+/// pill, while the assistant reply is a frosted card prefixed with a
+/// `>_ AI://` cursor and a thin cyan border so the conversation feels
+/// like a futuristic CLI rather than iMessage.
 struct ChatBubble: View {
     let message: ChatMessage
+
     var body: some View {
-        HStack {
-            if message.isUser { Spacer() }
-            
-            Text(message.text)
-                .font(.subheadline)
-                .foregroundColor(message.isUser ? .black : .white)
-                .padding(15)
-                .background(message.isUser ? AppTheme.neonGreen : Color.white.opacity(0.1))
-                .cornerRadius(20)
-                .overlay(
-                    // РЕШЕНИЕ: Разбиваем условие через Group, чтобы компилятор не смешивал Color и LinearGradient
-                    Group {
-                        if message.isUser {
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(Color.clear, lineWidth: 1)
-                        } else {
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(AppTheme.glassGradient, lineWidth: 1)
-                        }
-                    }
-                )
-                .shadow(color: message.isUser ? AppTheme.neonGreen.opacity(0.3) : .clear, radius: 10)
-                .frame(maxWidth: 280, alignment: message.isUser ? .trailing : .leading)
-            
-            if !message.isUser { Spacer() }
+        HStack(alignment: .top) {
+            if message.isUser { Spacer(minLength: 40) }
+
+            if message.isUser {
+                userBubble
+            } else {
+                assistantBubble
+            }
+
+            if !message.isUser { Spacer(minLength: 40) }
         }
+    }
+
+    private var userBubble: some View {
+        Text(message.text)
+            .font(.system(.subheadline, design: .rounded))
+            .foregroundColor(.black)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(AppTheme.neonGreen, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: AppTheme.neonGreen.opacity(0.35), radius: 10)
+            .frame(maxWidth: 280, alignment: .trailing)
+    }
+
+    private var assistantBubble: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(">_")
+                    .font(.system(.caption, design: .monospaced).weight(.bold))
+                    .foregroundColor(AppTheme.accentCyan)
+                Text("AI://core")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(AppTheme.accentCyan.opacity(0.7))
+            }
+            Text(message.text)
+                .font(.system(.subheadline, design: .monospaced))
+                .foregroundColor(.white)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(AppTheme.accentCyan.opacity(0.45), lineWidth: 1)
+        )
+        .shadow(color: AppTheme.accentCyan.opacity(0.18), radius: 10)
+        .frame(maxWidth: 280, alignment: .leading)
     }
 }
 
@@ -1920,6 +1961,9 @@ struct HistoryRow: View {
 struct TooltipCloudView: View {
     let tooltip: TooltipType
     let steps: Double
+    let kcal: Double?
+    let distanceMeters: Double?
+    let exerciseMinutes: Double?
     let onClose: () -> Void
     
     @State private var appear = false
@@ -1944,7 +1988,30 @@ struct TooltipCloudView: View {
     }
     
     var tooltipTitle: String { switch tooltip { case .calories: return "Калории 🔥"; case .time: return "Активное время 🔥"; case .distance: return "Пройденный путь 🔥" } }
-    var tooltipDescription: String { switch tooltip { case .calories: return "Вы потратили \(Int(steps * 0.045)) ккал за активность!"; case .time: return "Это чистое время вашей активности в движении."; case .distance: return "Дистанция рассчитана на основе количества ваших шагов." } }
+    /// Tooltip text now mirrors what the card shows. Previously the
+    /// card used HealthKit (`activeEnergyBurned`, `appleExerciseTime`,
+    /// `distanceWalkingRunning`) but the tooltip kept quoting a step
+    /// heuristic, so the numbers disagreed.
+    var tooltipDescription: String {
+        switch tooltip {
+        case .calories:
+            if let kcal {
+                return "Активные калории из Apple Health: \(Int(kcal.rounded())) ккал."
+            }
+            return "Оценка по шагам (без Apple Health): ~\(Int(steps * 0.045)) ккал."
+        case .time:
+            if let minutes = exerciseMinutes {
+                return "Из Apple Health: \(Int(minutes.rounded())) мин активности сегодня."
+            }
+            return "Подключи Apple Health, чтобы увидеть реальные минуты активности."
+        case .distance:
+            if let meters = distanceMeters {
+                let km = meters / 1000
+                return String(format: "Из Apple Health: %.2f км за сегодня.", km)
+            }
+            return "Оценка по шагам — для точности подключи Apple Health."
+        }
+    }
     var tooltipColor: Color { switch tooltip { case .calories: return AppTheme.accentOrange; case .time: return AppTheme.accentCyan; case .distance: return AppTheme.neonGreen } }
     var tooltipIcon: String { switch tooltip { case .calories: return "flame.fill"; case .time: return "timer"; case .distance: return "figure.walk" } }
 }

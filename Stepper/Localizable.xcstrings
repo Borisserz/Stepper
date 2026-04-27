@@ -241,6 +241,57 @@
         }
       }
     },
+    "gps.coach.idle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standby"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ожидание..."
+          }
+        }
+      }
+    },
+    "gps.coach.paused": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You paused"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы остановились"
+          }
+        }
+      }
+    },
+    "gps.coach.tracking": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tracking active"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Идёт трекинг"
+          }
+        }
+      }
+    },
     "health.error.unavailable": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -294,6 +345,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ошибка покупки"
+          }
+        }
+      }
+    },
+    "paywall.trust.cancelAnytime": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CANCEL ANYTIME · NO COMMITMENT"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ОТМЕНА В ЛЮБОЕ ВРЕМЯ"
           }
         }
       }
@@ -1467,6 +1535,57 @@
           "stringUnit": {
             "state": "translated",
             "value": "Завершить"
+          }
+        }
+      }
+    },
+    "workout.record.finish.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Завершить"
+          }
+        }
+      }
+    },
+    "workout.record.finish.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your route, distance and time will be saved to History and Apple Health."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Маршрут, дистанция и время сохранятся в Историю и Apple Health."
+          }
+        }
+      }
+    },
+    "workout.record.finish.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish workout?"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Завершить тренировку?"
           }
         }
       }

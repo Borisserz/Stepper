@@ -10,23 +10,19 @@ struct GPSTabView: View {
     @State private var sway = false; @State private var pulse = false; @State private var reflection = -1.0
     @State private var points = 1250; @State private var activeActivity: ActivityType = .walk
     @State private var caloriesBurned: Double = 0.0; @State private var currentPace = 0.0; @State private var currentBPM = 0
-    @State private var comboMultiplier = 1.0; @State private var isAutoPaused = false
-    
-    @State private var isAnomalyActive = false; @State private var anomalyTimer = 0; @State private var minedCrypto = 0.0; @State private var radarSweep = false
+    @State private var isAutoPaused = false
+
+    @State private var minedCrypto = 0.0; @State private var radarSweep = false
     @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic); @State private var isSatelliteMode = false
     @State private var showLeague = false
     @State private var isCreatingRoute = false; @State private var showRoutePrompt = false; @State private var showActiveRouteWarning = false
-    
+
     @State private var routePoints: [CLLocationCoordinate2D] = []
     @State private var calculatedRoute: MKRoute? = nil
     @State private var showStartRouteSheet = false; @State private var showCompletionSheet = false
-    
-    @State private var coachMessage = "Системы в норме 🟢"; @State private var userLevel = 1; @State private var showLevelUp = false
-    @State private var weatherCondition = "Синхронизация 📡"; @State private var ghostTaunt = "Догоняй! 👻"
-    
-    @State private var scanlineOffset: CGFloat = -1000
-    @State private var isGlitching = false
-    
+
+    @State private var coachMessage = String(localized: "gps.coach.idle"); @State private var userLevel = 1; @State private var showLevelUp = false
+
     @State private var showWeatherSheet = false
     @State private var showNeuralCore = false
     @State private var showRecordSheet = false
@@ -36,15 +32,13 @@ struct GPSTabView: View {
     var body: some View {
         ZStack {
             AppTheme.bgDark.ignoresSafeArea()
-            if comboMultiplier >= 2.0 { RoundedRectangle(cornerRadius: 30).stroke(AppTheme.gold, lineWidth: pulse ? 8 : 2).blur(radius: 5).ignoresSafeArea().opacity(0.8).animation(.easeInOut(duration: 0.5), value: pulse) }
-            
             mapLayer
+            // Subtle ambient particles only — the previous tracking layer
+            // stacked CyberpunkRain + scanlines + anomaly red border + gold
+            // combo border on top of the map and made the actual route
+            // unreadable. Removed for App Review readability and to drop
+            // the fake "АНОМАЛИЯ ВЗЛОМАНА" gamification.
             FloatingParticlesView()
-            if routeManager.isTracking { CyberpunkRainView() }
-            if isAnomalyActive { Rectangle().stroke(AppTheme.accentRed, lineWidth: pulse ? 15 : 5).blur(radius: 20).ignoresSafeArea().allowsHitTesting(false) }
-            
-            Rectangle().fill(LinearGradient(colors: [.clear, AppTheme.accentCyan.opacity(0.15), .clear], startPoint: .top, endPoint: .bottom)).frame(height: 40).offset(y: scanlineOffset).allowsHitTesting(false)
-            
             uiOverlay
             
             if let toast = routeManager.globalToastMessage {
@@ -82,8 +76,6 @@ struct GPSTabView: View {
             locManager.requestAuth()
             withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) { sway = true; pulse = true }
             withAnimation(.easeOut(duration: 3).repeatForever(autoreverses: false)) { radarSweep = true }
-            withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) { scanlineOffset = UIScreen.main.bounds.height + 200 }
-            Timer.scheduledTimer(withTimeInterval: 3.5, repeats: true) { _ in if Bool.random() { withAnimation(.spring(response: 0.1, dampingFraction: 0.2)) { isGlitching = true }; DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { withAnimation { isGlitching = false } } } }
             DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) { if routeManager.myOwnedClub != nil { withAnimation { routeManager.incomingWarPopup = true } } }
         }
         .onReceive(timer) { tick in
@@ -104,7 +96,7 @@ struct GPSTabView: View {
         .sheet(isPresented: $showWeatherSheet) { WeatherCyberSheet() }
         .fullScreenCover(isPresented: $showNeuralCore) { AICoreHubView() }
         .fullScreenCover(isPresented: $routeManager.isHubPresented) { RoutesAndChallengesHub() }
-        .sheet(isPresented: $showCompletionSheet, onDismiss: { resetAfterCompletion() }) { RouteCompletionSheet(calories: caloriesBurned, combo: comboMultiplier) }
+        .sheet(isPresented: $showCompletionSheet, onDismiss: { resetAfterCompletion() }) { RouteCompletionSheet(calories: caloriesBurned) }
         .fullScreenCover(isPresented: $showRecordSheet) { RecordWorkoutView() }
     }
     
@@ -143,7 +135,7 @@ struct GPSTabView: View {
             
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("GPS 🔥").font(.system(size: 36, weight: .black, design: .rounded)).foregroundColor(isGlitching ? AppTheme.accentRed : .white).overlay(LinearGradient(colors: [.clear, .white.opacity(0.8), .clear], startPoint: .topLeading, endPoint: .bottomTrailing).offset(x: reflection * 150).mask(Text("GPS 🔥").font(.system(size: 36, weight: .black, design: .rounded)))).shadow(color: AppTheme.accentBlue, radius: pulse ? 15 : 5).scaleEffect(pulse ? 1.05 : 0.95).rotationEffect(.degrees(sway ? 2 : -2)).offset(x: isGlitching ? CGFloat.random(in: -4...4) : 0, y: isGlitching ? CGFloat.random(in: -2...2) : 0)
+                    Text("GPS 🔥").font(.system(size: 36, weight: .black, design: .rounded)).foregroundColor(.white).overlay(LinearGradient(colors: [.clear, .white.opacity(0.8), .clear], startPoint: .topLeading, endPoint: .bottomTrailing).offset(x: reflection * 150).mask(Text("GPS 🔥").font(.system(size: 36, weight: .black, design: .rounded)))).shadow(color: AppTheme.accentBlue, radius: pulse ? 15 : 5).scaleEffect(pulse ? 1.05 : 0.95).rotationEffect(.degrees(sway ? 2 : -2))
                     HStack {
                         Button(action: { triggerImpact(); isSatelliteMode.toggle() }) { Image(systemName: isSatelliteMode ? "map.fill" : "globe.americas.fill").font(.title3).foregroundColor(.white).padding(10).background(.ultraThinMaterial).clipShape(Circle()).overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)).shadow(color: AppTheme.accentCyan.opacity(0.5), radius: 5) }.buttonStyle(BouncyButton())
                         Button(action: { triggerImpact(); let center = locManager.location?.coordinate ?? CLLocationCoordinate2D(latitude: 53.9, longitude: 27.5); withAnimation { cameraPosition = .camera(MapCamera(centerCoordinate: center, distance: 800, heading: 0, pitch: 0)) } }) { Image(systemName: "location.fill").font(.title3).foregroundColor(.white).padding(10).background(.ultraThinMaterial).clipShape(Circle()).overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)) }.buttonStyle(BouncyButton())
@@ -186,7 +178,7 @@ struct GPSTabView: View {
                         VStack(alignment: .leading, spacing: 2) { Text("ТЕМП").font(.system(size: 8, weight: .bold)).foregroundColor(AppTheme.accentCyan); Text(String(format: "%.1f", routeManager.isTracking ? currentPace : 0.0)).font(.system(size: 18, weight: .heavy, design: .monospaced)).foregroundColor(routeManager.isTracking ? .white : .gray) }
                     }
                     HStack(spacing: 4) { Image(systemName: "bitcoinsign.circle.fill").foregroundColor(AppTheme.gold).font(.system(size: 10)); Text("+\(String(format: "%.2f", minedCrypto))").font(.system(size: 10, weight: .bold)).foregroundColor(AppTheme.gold) }
-                    Text(routeManager.isTracking ? ghostTaunt : "Ожидание...").font(.system(size: 9)).foregroundColor(.gray).italic().lineLimit(1).frame(width: 110, alignment: .leading)
+                    Text(routeManager.isTracking ? coachMessage : String(localized: "gps.coach.idle")).font(.system(size: 9)).foregroundColor(.gray).italic().lineLimit(1).frame(width: 110, alignment: .leading)
                 }.padding(10).background(.ultraThinMaterial).cornerRadius(15).overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.accentCyan.opacity(routeManager.isTracking ? 0.5 : 0.2), lineWidth: 1)).opacity(routeManager.isTracking ? 1.0 : 0.6)
                 
                 Spacer()
@@ -198,13 +190,15 @@ struct GPSTabView: View {
                             Button(action: { triggerImpact(style: .heavy); if routeManager.activeRoute != nil { showActiveRouteWarning = true } else { showRoutePrompt = true } }) { Image(systemName: "plus.viewfinder").font(.title2).foregroundColor(AppTheme.neonGreen).padding(10).background(.ultraThinMaterial).clipShape(Circle()).overlay(Circle().stroke(AppTheme.neonGreen, lineWidth: 2)).shadow(color: AppTheme.neonGreen.opacity(0.5), radius: 10).rotationEffect(.degrees(sway ? 10 : -10)) }.buttonStyle(BouncyButton())
                         }.padding(.bottom, 5)
                     }
-                    if routeManager.isTracking && comboMultiplier > 1.0 && !isAutoPaused { Text("x\(String(format: "%.1f", comboMultiplier)) 🔥").font(.system(size: 10, weight: .bold)).foregroundColor(AppTheme.gold).shadow(color: AppTheme.accentOrange, radius: 10).scaleEffect(pulse ? 1.1 : 0.9).transition(.scale) }
+                    // Removed fake "combo multiplier x1.5" badge — it was
+                    // tied to a Math.random tick that fabricated bonus
+                    // points unrelated to the user's real activity.
                     ZStack { Circle().stroke(Color.white.opacity(0.1), lineWidth: 4).frame(width: 55, height: 55); Circle().trim(from: 0, to: min(caloriesBurned / 500.0, 1.0)).stroke(AppTheme.fireGradient, style: StrokeStyle(lineWidth: 4, lineCap: .round)).rotationEffect(.degrees(-90)).frame(width: 55, height: 55).shadow(color: AppTheme.accentOrange, radius: 4); VStack(spacing: 0) { Text(String(format: "%.0f", caloriesBurned)).font(.system(size: 14, weight: .heavy, design: .monospaced)).foregroundColor(.white); Text("KCAL").font(.system(size: 7, weight: .bold)).foregroundColor(.gray) } }.padding(10).background(.ultraThinMaterial).cornerRadius(15).overlay(RoundedRectangle(cornerRadius: 15).stroke(AppTheme.glassGradient, lineWidth: 1)).shadow(color: AppTheme.accentRed.opacity(pulse ? 0.3 : 0.1), radius: 10).scaleEffect(pulse ? 1.02 : 0.98)
                 }
             }.padding(.horizontal); Spacer().frame(height: 15)
             
             HStack(spacing: 10) {
-                ForEach(ActivityType.allCases, id: \.self) { type in Button(action: { triggerImpact(); activeActivity = type; withAnimation { routeManager.isTracking = true; isAutoPaused = false; isAnomalyActive = false; currentPace = 0.0; currentBPM = 0; minedCrypto = 0 } }) { VStack { Image(systemName: type.icon).font(.title2); Text(type.rawValue).font(.caption2.bold()) }.foregroundColor(activeActivity == type ? .white : .gray).frame(maxWidth: .infinity).padding(.vertical, 12).background(activeActivity == type ? AppTheme.accentBlue : Color.white.opacity(0.1)).cornerRadius(15).shadow(color: activeActivity == type ? AppTheme.accentBlue.opacity(0.6) : .clear, radius: 10) }.buttonStyle(BouncyButton()) }
+                ForEach(ActivityType.allCases, id: \.self) { type in Button(action: { triggerImpact(); activeActivity = type; withAnimation { routeManager.isTracking = true; isAutoPaused = false; currentPace = 0.0; currentBPM = 0; minedCrypto = 0 } }) { VStack { Image(systemName: type.icon).font(.title2); Text(type.rawValue).font(.caption2.bold()) }.foregroundColor(activeActivity == type ? .white : .gray).frame(maxWidth: .infinity).padding(.vertical, 12).background(activeActivity == type ? AppTheme.accentBlue : Color.white.opacity(0.1)).cornerRadius(15).shadow(color: activeActivity == type ? AppTheme.accentBlue.opacity(0.6) : .clear, radius: 10) }.buttonStyle(BouncyButton()) }
             }.padding(.horizontal).background(.ultraThinMaterial).cornerRadius(25).padding(.horizontal)
             
             HStack(spacing: 8) {
@@ -218,12 +212,6 @@ struct GPSTabView: View {
     
     private func updateTrackingLogic() {
         if routeManager.isTracking {
-            if isAnomalyActive {
-                anomalyTimer -= 1
-                if anomalyTimer <= 0 { withAnimation { isAnomalyActive = false }; if currentPace >= 8.0 { triggerNotification(type: .success); points += 500; coachMessage = "АНОМАЛИЯ ВЗЛОМАНА! +500 💰" } else { triggerImpact(style: .heavy); comboMultiplier = 1.0; coachMessage = "СБОЙ! Вы не успели 💀" } } else if currentPace >= 8.0 { minedCrypto += 0.5 }
-            } else { if Int.random(in: 0...100) > 96 && currentPace > 3.0 && !isAutoPaused { triggerImpact(style: .heavy); withAnimation { isAnomalyActive = true; anomalyTimer = 30 } } }
-            if Int.random(in: 0...15) == 5 { let w = ["Ветер: 3 м/с 💨", "Связь стабильна 📡", "Сыро 💧", "Магнитная буря ⚡️"]; withAnimation { weatherCondition = w.randomElement()! } }
-            if Int.random(in: 0...20) == 5 { let t = ["Нейро-Спутник сзади! 🤖", "Ускоряйся! 👻", "Сигнал в норме 📡", "Не останавливайся! 🏃"]; withAnimation { ghostTaunt = t.randomElement()! } }
             // Real-time speed from CoreLocation (m/s -> km/h). Negative
             // speed means "unknown" per CLLocation docs.
             let rawSpeed = locManager.location?.speed ?? -1
@@ -238,19 +226,18 @@ struct GPSTabView: View {
             }
 
             if currentPace < 1.0 {
-                isAutoPaused = true
-                withAnimation { coachMessage = "Система: Вы остановились ⏸️" }
-            } else {
-                isAutoPaused = false
-                caloriesBurned += (activeActivity.burnRate * comboMultiplier)
-                minedCrypto += (0.01 * comboMultiplier)
-                if currentBPM > 140 { triggerImpact(style: .soft) }
-                routeManager.addChallengeProgress(
-                    amount: (activeActivity.burnRate * comboMultiplier) * 0.1
-                )
-                if Double.random(in: 0...1) > 0.85 {
-                    withAnimation { comboMultiplier = min(2.5, comboMultiplier + 0.1) }
+                if !isAutoPaused {
+                    isAutoPaused = true
+                    withAnimation { coachMessage = String(localized: "gps.coach.paused") }
                 }
+            } else {
+                if isAutoPaused {
+                    isAutoPaused = false
+                    withAnimation { coachMessage = String(localized: "gps.coach.tracking") }
+                }
+                caloriesBurned += activeActivity.burnRate
+                if currentBPM > 140 { triggerImpact(style: .soft) }
+                routeManager.addChallengeProgress(amount: activeActivity.burnRate * 0.1)
             }
         }
         if routeManager.activeRoute != nil && routeManager.isTracking && !isAutoPaused {
@@ -259,7 +246,7 @@ struct GPSTabView: View {
         }
     }
     
-    private func resetAfterCompletion() { routeManager.activeRoute = nil; routeManager.previewRoute = nil; routePoints.removeAll(); calculatedRoute = nil; routeManager.traveledProgress = 0.0; comboMultiplier = 1.0; points += 1500; minedCrypto = 0; isAnomalyActive = false; routeManager.isTracking = false }
+    private func resetAfterCompletion() { routeManager.activeRoute = nil; routeManager.previewRoute = nil; routePoints.removeAll(); calculatedRoute = nil; routeManager.traveledProgress = 0.0; points += 1500; minedCrypto = 0; routeManager.isTracking = false }
     
     private func interpolate(_ points: [CLLocationCoordinate2D], progress: CGFloat) -> CLLocationCoordinate2D {
         guard points.count >= 2 else { return points.first ?? CLLocationCoordinate2D(latitude: 0, longitude: 0) }
@@ -299,7 +286,7 @@ struct StartRouteSheet: View {
 }
 
 struct RouteCompletionSheet: View {
-    @Environment(\.dismiss) var dismiss; let calories: Double; let combo: Double
+    @Environment(\.dismiss) var dismiss; let calories: Double
     var body: some View {
         ZStack {
             AppTheme.bgDark.ignoresSafeArea(); MeshGradientBackground(); FloatingParticlesView()

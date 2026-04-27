@@ -25,6 +25,7 @@ struct RecordWorkoutView: View {
     @State private var selectedActivity: ActivityType = .walk
     @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var showDiscardConfirm = false
+    @State private var showFinishConfirm = false
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var saveError: String?
 
@@ -65,6 +66,15 @@ struct RecordWorkoutView: View {
             Button(role: .cancel) { saveError = nil } label: { Text("common.ok") }
         } message: {
             Text(saveError ?? "")
+        }
+        .alert(Text("workout.record.finish.title"),
+               isPresented: $showFinishConfirm) {
+            Button(role: .cancel) { } label: { Text("common.cancel") }
+            Button(role: .destructive) {
+                Task { await finishRecording() }
+            } label: { Text("workout.record.finish.confirm") }
+        } message: {
+            Text("workout.record.finish.message")
         }
     }
 
@@ -175,14 +185,14 @@ struct RecordWorkoutView: View {
                         recorder.pause()
                     }
                     primaryButton(titleKey: "workout.record.finish", color: AppTheme.accentRed) {
-                        Task { await finishRecording() }
+                        showFinishConfirm = true
                     }
                 case .paused:
                     secondaryButton(titleKey: "workout.record.resume") {
                         recorder.resume()
                     }
                     primaryButton(titleKey: "workout.record.finish", color: AppTheme.accentRed) {
-                        Task { await finishRecording() }
+                        showFinishConfirm = true
                     }
                 }
             }
