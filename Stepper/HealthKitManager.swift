@@ -29,7 +29,13 @@ final class HealthKitManager {
     /// True once `requestAuthorization()` returned without throwing.
     private(set) var hasRequestedAuthorization: Bool = false
 
-    private let store = HKHealthStore()
+    /// `HKHealthStore` is documented as thread-safe, and we need to call
+    /// `execute(_:)` on it from `nonisolated` query helpers. Marking the
+    /// store `nonisolated(unsafe)` keeps a single retained instance for the
+    /// lifetime of the manager — creating a throwaway `HKHealthStore()` per
+    /// query risks ARC deallocating it before the completion handler fires,
+    /// which would suspend `withCheckedContinuation` forever.
+    private nonisolated(unsafe) let store = HKHealthStore()
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -117,7 +123,7 @@ final class HealthKitManager {
             ) { _, statistics, _ in
                 continuation.resume(returning: statistics?.sumQuantity()?.doubleValue(for: unit))
             }
-            HKHealthStore().execute(query)
+            store.execute(query)
         }
     }
 
@@ -134,7 +140,7 @@ final class HealthKitManager {
                     .quantity.doubleValue(for: HKUnit(from: "count/min"))
                 continuation.resume(returning: bpm)
             }
-            HKHealthStore().execute(query)
+            store.execute(query)
         }
     }
 }
