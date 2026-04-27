@@ -29,13 +29,13 @@ final class HealthKitManager {
     /// True once `requestAuthorization()` returned without throwing.
     private(set) var hasRequestedAuthorization: Bool = false
 
-    /// `HKHealthStore` is documented as thread-safe, and we need to call
-    /// `execute(_:)` on it from `nonisolated` query helpers. Marking the
-    /// store `nonisolated(unsafe)` keeps a single retained instance for the
-    /// lifetime of the manager — creating a throwaway `HKHealthStore()` per
-    /// query risks ARC deallocating it before the completion handler fires,
-    /// which would suspend `withCheckedContinuation` forever.
-    private nonisolated(unsafe) let store = HKHealthStore()
+    /// `HKHealthStore` conforms to `Sendable` and is thread-safe per Apple's
+    /// docs. Holding a single retained instance keeps the underlying object
+    /// alive for the lifetime of the manager — creating a throwaway store
+    /// per query (the previous implementation) risked ARC deallocating it
+    /// before the completion handler fired, which would suspend
+    /// `withCheckedContinuation` forever.
+    private nonisolated let store = HKHealthStore()
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 

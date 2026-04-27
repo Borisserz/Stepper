@@ -47,7 +47,7 @@ final class WorkoutRecorder {
     private var lastTickAt: Date?
     private var clock: Timer?
 
-    private nonisolated(unsafe) let store = HKHealthStore()
+    private nonisolated let store = HKHealthStore()
 
     // MARK: - Convenience getters for the UI
 
