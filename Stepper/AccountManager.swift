@@ -80,6 +80,7 @@ final class AccountManager {
         switch result {
         case .success(let authorization):
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                currentRawNonce = nil
                 lastError = NSLocalizedString("auth.error.unknownCredential",
                                               value: "Unknown credential type",
                                               comment: "")
@@ -161,13 +162,14 @@ final class AccountManager {
         await FirestoreSyncService.shared.deleteAllForCurrentUser()
 
         // 2. Delete the Firebase user record (revokes the SIWA refresh
-        //    token automatically when the session is fresh).
+        //    token automatically when the session is fresh). Capture the
+        //    error here — `signOut()` below clears `lastError`, so we
+        //    have to restore it after for any UI observer to see it.
+        var deletionError: String?
         do {
             try await FirebaseAuthBridge.deleteAccount()
         } catch {
-            // Common case: token requires re-auth. The local session is
-            // still cleared so the UX is consistent.
-            lastError = error.localizedDescription
+            deletionError = error.localizedDescription
         }
 
         // 3. Best-effort: clear known per-user UserDefaults keys so opening
@@ -176,6 +178,9 @@ final class AccountManager {
             defaults.removeObject(forKey: key)
         }
         signOut()
+        if let deletionError {
+            lastError = deletionError
+        }
         return true
     }
 
