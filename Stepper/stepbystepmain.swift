@@ -118,10 +118,14 @@ class SearchDebouncer: ObservableObject {
 // MARK: - MAIN SCREEN
 struct MainScreenView: View {
     @Environment(\.scenePhase) var scenePhase
+    @Environment(HealthKitManager.self) private var health
     @StateObject private var locManager = LocationManager()
     @StateObject private var debouncer = SearchDebouncer()
-    
-    @State private var steps: Double = 6432
+
+    /// Live step total from HealthKit. Falls back to 0 when the user has
+    /// not granted Health permission yet — the previous hardcoded value
+    /// (6432) was placeholder data and would have failed App Review.
+    private var steps: Double { health.todaySteps ?? 0 }
     @AppStorage("dailyStepGoal") private var goal: Double = 10000
     @State private var activeSheet: ActiveSheet? = nil
     @State private var isAppActive = true
@@ -184,9 +188,15 @@ struct MainScreenView: View {
                 })
             }
         }
-        .task { locManager.requestAuth() }
-        .onChange(of: scenePhase) { oldPhase, newPhase in
+        .task {
+            locManager.requestAuth()
+            await health.requestAuthorization()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
             isAppActive = (newPhase == .active)
+            if newPhase == .active {
+                Task { await health.refreshAll() }
+            }
         }
         .sheet(item: $activeSheet) { sheet in SheetRouter(sheet: sheet, locManager: locManager) }
         // Открываем чат на весь экран
