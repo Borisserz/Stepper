@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: SwiftLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: |
+          curl -sLO https://github.com/realm/SwiftLint/releases/download/0.57.0/swiftlint_linux.zip
+          unzip swiftlint_linux.zip
+          sudo mv swiftlint /usr/local/bin/
+
+      - name: Run SwiftLint
+        # Not strict: existing codebase is intentionally dense.
+        # CI fails only on rule violations classified as errors.
+        run: swiftlint --reporter github-actions-logging
+
+  build:
+    name: Xcode build (iOS Simulator)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode (26.x — project requires Xcode 26+)
+        run: |
+          ls /Applications | grep -i xcode || true
+          # Pick the newest Xcode 26.x available on the runner. The project was
+          # created with Xcode 26.3 (CreatedOnToolsVersion = 26.3); any 26.x
+          # works, 16.x does not because we use iOS 26 Toolchain APIs.
+          for xc in \
+            /Applications/Xcode_26.1.1.app \
+            /Applications/Xcode_26.1.app \
+            /Applications/Xcode_26.0.1.app \
+            /Applications/Xcode_26.0.app \
+            /Applications/Xcode.app; do
+            if [ -d "$xc" ]; then
+              sudo xcode-select -s "$xc/Contents/Developer"
+              echo "Using $xc"
+              break
+            fi
+          done
+          xcodebuild -version
+          swift --version
+
+      - name: Pick iOS Simulator destination
+        id: dest
+        run: |
+          # First iPhone simulator with an iOS 26+ runtime, falling back to
+          # any available iPhone simulator.
+          DEVICE=$(xcrun simctl list devices available \
+            | awk '/-- iOS 26/,/-- iOS [^2]/' \
+            | grep -E "iPhone .*\([A-F0-9-]+\)" \
+            | head -1 \
+            | sed -E 's/^[[:space:]]*([^(]+)\(.*$/\1/' \
+            | sed -E 's/[[:space:]]+$//')
+          if [ -z "$DEVICE" ]; then
+            DEVICE=$(xcrun simctl list devices available \
+              | grep -E "iPhone .*\([A-F0-9-]+\)" \
+              | head -1 \
+              | sed -E 's/^[[:space:]]*([^(]+)\(.*$/\1/' \
+              | sed -E 's/[[:space:]]+$//')
+          fi
+          if [ -z "$DEVICE" ]; then
+            echo "::error::no iOS Simulator iPhone available on runner"
+            exit 1
+          fi
+          DEST="platform=iOS Simulator,name=$DEVICE"
+          echo "destination=$DEST" >> "$GITHUB_OUTPUT"
+          echo "Using destination: $DEST"
+
+      - name: Build for iOS Simulator (no signing)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Stepper.xcodeproj \
+            -scheme Stepper \
+            -configuration Debug \
+            -destination "${{ steps.dest.outputs.destination }}" \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build 2>&1 | tee xcodebuild.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "::group::Asset catalog & error excerpt"
+            grep -E "error:|warning:|actool|asset|catalog|AppIcon" xcodebuild.log | tail -100 || true
+            echo "::endgroup::"
+            exit "$status"
+          fi
+
+      - name: Validate Privacy Manifest
+        run: |
+          test -f Stepper/PrivacyInfo.xcprivacy
+          /usr/libexec/PlistBuddy -c "Print" Stepper/PrivacyInfo.xcprivacy > /dev/null
+          echo "PrivacyInfo.xcprivacy is valid"
+
+      - name: Validate AppIcon assets
+        run: |
+          test -f Stepper/Assets.xcassets/AppIcon.appiconset/AppIcon-Light.png
+          test -f Stepper/Assets.xcassets/AppIcon.appiconset/AppIcon-Dark.png
+          test -f Stepper/Assets.xcassets/AppIcon.appiconset/AppIcon-Tinted.png
+          file Stepper/Assets.xcassets/AppIcon.appiconset/*.png

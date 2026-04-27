@@ -1,0 +1,14 @@
+title: footstepeR
+description: Cyberpunk fitness ecosystem for iOS
+theme: jekyll-theme-cayman
+markdown: kramdown
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: true
+include:
+  - privacy-policy.md
+  - terms-of-service.md
+  - support.md
+  - app-store-connect.md

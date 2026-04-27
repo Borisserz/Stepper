@@ -97,15 +97,57 @@ This project strictly adheres to modern Apple development paradigms, prioritizin
 
 ## 🚀 Installation & Setup
 
-To compile and run this project, you will need **macOS Sonoma** and **Xcode 15.0+** (iOS 17.0+ Simulator or Physical Device required for new MapKit features).
+You will need **macOS Sequoia** (15) and **Xcode 26+** (the project uses Swift 6.2 features such as `SWIFT_APPROACHABLE_CONCURRENCY` and the `MainActor` default isolation). The deployment target is **iOS 17.0**, so any iPhone or iPad on iOS 17 or later will run the app.
 
 1. **Clone the repository:**
-   `git clone https://github.com/YOUR_GITHUB_NAME/footstepeRR.git`
 
-2. **Build and Run:**
-   Select a physical iPhone (Highly recommended to test MapKit location tracking, Haptics, and the Microphone) and press `Cmd + R`.
-3. **Permissions:**
-   Upon first launch, ensure you grant the requested permissions for **Location Services** (for the map) and **Speech Recognition** (for the AI mic button).
+   ```bash
+   git clone https://github.com/Borisserz/Stepper.git
+   cd Stepper
+   ```
+
+2. **Open in Xcode:**
+
+   ```bash
+   open Stepper.xcodeproj
+   ```
+
+3. **Set your signing team.** The repo intentionally ships **without** a development team. In Xcode:
+
+   - Select the `Stepper` target → Signing & Capabilities → tick "Automatically manage signing" → choose your Personal Team (or paid Apple Developer team).
+
+4. **Build & Run.** A physical iPhone is recommended to fully exercise MapKit, Haptics, the microphone, and HealthKit. The Simulator works for everything except real GPS/HealthKit/microphone.
+
+5. **Permissions.** On first launch the app requests:
+
+   - **Location** — for live GPS tracking and the map.
+   - **Microphone** — for the AI Coach voice input.
+   - **Speech Recognition** — for transcribing what you say.
+   - **Motion & Fitness** — fallback step counter when Apple Health is unavailable.
+   - **Apple Health** — primary source for steps, distance, heart rate (PR #2).
+
+## 🛠 Developer Tooling
+
+| File | Purpose |
+|------|---------|
+| `.swiftlint.yml` | SwiftLint configuration (relaxed; tightened in later PRs). |
+| `.github/workflows/ci.yml` | Lints and builds on every push/PR. |
+| `scripts/generate_appicon.py` | Regenerates the AppIcon variants from code. |
+| `Stepper/PrivacyInfo.xcprivacy` | Apple privacy manifest. Keep in sync with the App Privacy questionnaire in App Store Connect. |
+| `docs/` | Privacy Policy, Terms, Support, App Store metadata — also the GitHub Pages source. |
+
+## 📲 App Store submission
+
+See [`docs/app-store-connect.md`](docs/app-store-connect.md) for the full
+metadata and pre-submission checklist.
+
+Privacy Policy / Terms / Support are designed to be hosted via GitHub Pages
+(Settings → Pages → Source: `docs/` on `main`). After enabling, the URLs you
+need for App Store Connect become:
+
+- `https://borisserz.github.io/Stepper/privacy-policy.html`
+- `https://borisserz.github.io/Stepper/terms-of-service.html`
+- `https://borisserz.github.io/Stepper/support.html`
 
 ---
 
