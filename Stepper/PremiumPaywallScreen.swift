@@ -281,7 +281,10 @@ private struct PricingPlansView: View {
     var body: some View {
         VStack(spacing: 16) {
             ForEach(plans) { plan in
-                PlanRowCyberView(plan: plan, isSelected: selectedProductID == (plan.productID ?? "")) {
+                // Placeholders (productID == nil) must never look "selected" —
+                // otherwise all three rows light up while StoreKit is loading.
+                let isSelected = plan.productID.map { $0 == selectedProductID } ?? false
+                PlanRowCyberView(plan: plan, isSelected: isSelected) {
                     guard let pid = plan.productID else { return }
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                         selectedProductID = pid
