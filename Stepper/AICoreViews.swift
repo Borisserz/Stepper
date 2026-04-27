@@ -9,15 +9,25 @@ struct OracleRouteItem: Identifiable {
 
 struct AICoreHubView: View {
     @Environment(\.dismiss) var dismiss
-    @State private var activeTab: AITab = .avatar
+    @State private var activeTab: AITab = .chat
     @State private var pulse = false
     @State private var scanlineOffset: CGFloat = -500
     @State private var aiThinking = false
     @State private var terminalLogs: [String] = ["> СИСТЕМА: Инициализация Нейро-Ядра...", "> ИИ: Анализ биометрии за последние 7 дней завершен.", "> СТАТУС: Цифровой двойник синхронизирован."]
     
     enum AITab: String, CaseIterable {
+        case chat = "AI КОУЧ"
         case avatar = "ДВОЙНИК", oracle = "ОРАКУЛ", bioFuel = "БИО-ТОПЛИВО", market = "ЧЕРНЫЙ РЫНОК", hack = "НЕЙРО-ВЗЛОМ"
-        var icon: String { switch self { case .avatar: return "figure.stand.line.dotted.figure.stand"; case .oracle: return "eye.trianglebadge.exclamationmark"; case .bioFuel: return "flask.fill"; case .market: return "cart.circle.fill"; case .hack: return "bolt.shield.fill" } }
+        var icon: String {
+            switch self {
+            case .chat: return "bubble.left.and.bubble.right.fill"
+            case .avatar: return "figure.stand.line.dotted.figure.stand"
+            case .oracle: return "eye.trianglebadge.exclamationmark"
+            case .bioFuel: return "flask.fill"
+            case .market: return "cart.circle.fill"
+            case .hack: return "bolt.shield.fill"
+            }
+        }
     }
 
     var body: some View {
@@ -41,7 +51,7 @@ struct AICoreHubView: View {
                     }.padding(.horizontal).padding(.vertical, 15)
                 }
                 
-                TabView(selection: $activeTab) { DigitalTwinView(pulse: $pulse).tag(AITab.avatar); OraclePredictionView().tag(AITab.oracle); BioFuelView().tag(AITab.bioFuel); BlackMarketView().tag(AITab.market); NeuroHackView().tag(AITab.hack) }.tabViewStyle(.page(indexDisplayMode: .never)).animation(.easeInOut, value: activeTab)
+                TabView(selection: $activeTab) { AICoachChatView().tag(AITab.chat); DigitalTwinView(pulse: $pulse).tag(AITab.avatar); OraclePredictionView().tag(AITab.oracle); BioFuelView().tag(AITab.bioFuel); BlackMarketView().tag(AITab.market); NeuroHackView().tag(AITab.hack) }.tabViewStyle(.page(indexDisplayMode: .never)).animation(.easeInOut, value: activeTab)
                 
                 VStack(alignment: .leading, spacing: 5) {
                     HStack { Image(systemName: "terminal").foregroundColor(AppTheme.accentCyan); Text("ИИ ТЕРМИНАЛ").font(.system(size: 10, weight: .bold)).foregroundColor(.gray); Spacer() }

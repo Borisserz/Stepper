@@ -11,6 +11,10 @@ struct footstepeRRApp: App {
     let modelContainer: ModelContainer
 
     init() {
+        // Firebase boots before *any* UI state is constructed so Auth /
+        // Firestore / FirebaseAI are usable from the very first render.
+        FirebaseBootstrap.configure()
+
         // Настройка прозрачного TabBar
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
@@ -100,17 +104,8 @@ struct RootRouterView: View {
                 .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
                 
             case .main:
-                TabView {
-                    MainScreenView()
-                        .tabItem { Label("tab.summary", systemImage: "flame.fill") }
-
-                    GPSTabView()
-                        .tabItem { Label("tab.gps", systemImage: "map.fill") }
-
-                    SettingsView()
-                        .tabItem { Label("tab.settings", systemImage: "gearshape.fill") }
-                }
-                .transition(.opacity)
+                MainTabsView()
+                    .transition(.opacity)
             }
         }
         .onChange(of: account.isSignedIn) { _, signedIn in
@@ -122,6 +117,32 @@ struct RootRouterView: View {
                     flowState = .auth
                 }
             }
+        }
+    }
+}
+
+/// Hosts the bottom tab bar plus the one-shot Firestore pull on first
+/// launch (or first launch on a restored device). Lives at this level so
+/// it has access to the `\.modelContext` env value seeded by
+/// `.modelContainer` on the root.
+private struct MainTabsView: View {
+    @Environment(\.modelContext) private var modelContext
+
+    var body: some View {
+        TabView {
+            MainScreenView()
+                .tabItem { Label("tab.summary", systemImage: "flame.fill") }
+
+            GPSTabView()
+                .tabItem { Label("tab.gps", systemImage: "map.fill") }
+
+            SettingsView()
+                .tabItem { Label("tab.settings", systemImage: "gearshape.fill") }
+        }
+        .task {
+            // Best-effort cloud restore on fresh installs / new devices.
+            // Bails out instantly if SwiftData already has rows.
+            await FirestoreSyncService.shared.pullIfNeeded(into: modelContext)
         }
     }
 }
