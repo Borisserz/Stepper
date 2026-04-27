@@ -4,6 +4,7 @@ import Combine
 
 struct GPSTabView: View {
     @EnvironmentObject var routeManager: RouteManager
+    @Environment(HealthKitManager.self) private var health
     @StateObject private var locManager = LocationManager()
     
     @State private var sway = false; @State private var pulse = false; @State private var reflection = -1.0
@@ -85,7 +86,16 @@ struct GPSTabView: View {
             Timer.scheduledTimer(withTimeInterval: 3.5, repeats: true) { _ in if Bool.random() { withAnimation(.spring(response: 0.1, dampingFraction: 0.2)) { isGlitching = true }; DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { withAnimation { isGlitching = false } } } }
             DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) { if routeManager.myOwnedClub != nil { withAnimation { routeManager.incomingWarPopup = true } } }
         }
-        .onReceive(timer) { _ in updateTrackingLogic() }
+        .onReceive(timer) { tick in
+            updateTrackingLogic()
+            // Pull a fresh heart-rate sample every ~5s while tracking so
+            // the BPM widget reflects what Apple Watch / HealthKit just
+            // wrote, rather than a 1-time snapshot from app launch.
+            if routeManager.isTracking,
+               Int(tick.timeIntervalSinceReferenceDate) % 5 == 0 {
+                Task { await health.refreshAll() }
+            }
+        }
         .alert("Маршрут активен 🛑", isPresented: $showActiveRouteWarning) { Button("Ок", role: .cancel) { } } message: { Text("Заверши текущую пробежку.") }
         .alert("Создать маршрут? 🔥", isPresented: $showRoutePrompt) { Button("Да") { withAnimation { routeManager.previewRoute = nil; isCreatingRoute = true; routePoints.removeAll(); calculatedRoute = nil } }; Button("Отмена", role: .cancel) { } } message: { Text("Поставь 2 точки.") }
         .sheet(isPresented: $showStartRouteSheet) { StartRouteSheet(points: $routePoints, calculatedRoute: calculatedRoute, isCreatingRoute: $isCreatingRoute) }
@@ -128,7 +138,7 @@ struct GPSTabView: View {
             HStack(spacing: 20) {
                 HStack(spacing: 6) { Image(systemName: "figure.run").foregroundColor(routeManager.isTracking ? AppTheme.neonGreen : .gray); Text(String(format: "%.1f", routeManager.isTracking ? currentPace : 0.0)).font(.system(size: 16, weight: .bold, design: .monospaced)).foregroundColor(routeManager.isTracking ? .white : .gray); Text("km/h").font(.caption2).foregroundColor(.gray) }
                 Divider().background(Color.gray).frame(height: 20)
-                HStack(spacing: 6) { Image(systemName: "heart.fill").foregroundColor(routeManager.isTracking ? .pink : .gray).scaleEffect(pulse ? 1.2 : 0.9); Text("\(routeManager.isTracking ? currentBPM : 0)").font(.system(size: 16, weight: .bold, design: .monospaced)).foregroundColor(routeManager.isTracking ? .white : .gray) }
+                HStack(spacing: 6) { Image(systemName: "heart.fill").foregroundColor(routeManager.isTracking ? .pink : .gray).scaleEffect(pulse ? 1.2 : 0.9); Text(routeManager.isTracking && currentBPM > 0 ? "\(currentBPM)" : "—").font(.system(size: 16, weight: .bold, design: .monospaced)).foregroundColor(routeManager.isTracking ? .white : .gray) }
             }.padding(.horizontal, 25).padding(.vertical, 12).background(.ultraThinMaterial).clipShape(Capsule()).overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1)).shadow(color: AppTheme.neonGreen.opacity(pulse && routeManager.isTracking ? 0.4 : 0.0), radius: pulse ? 15 : 5).padding(.top, 10).transition(.move(edge: .top).combined(with: .opacity)).opacity(routeManager.isTracking ? 1.0 : 0.6)
             
             HStack(alignment: .top) {
@@ -172,7 +182,7 @@ struct GPSTabView: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 15) {
-                        VStack(alignment: .leading, spacing: 2) { Text("ПУЛЬС").font(.system(size: 8, weight: .bold)).foregroundColor(.pink); HStack(spacing: 2) { Text("\(routeManager.isTracking ? currentBPM : 0)").font(.system(size: 18, weight: .heavy, design: .monospaced)).foregroundColor(routeManager.isTracking ? .white : .gray); Image(systemName: "heart.fill").foregroundColor(.pink).font(.caption2).scaleEffect(pulse ? 1.2 : 0.9) } }
+                        VStack(alignment: .leading, spacing: 2) { Text("ПУЛЬС").font(.system(size: 8, weight: .bold)).foregroundColor(.pink); HStack(spacing: 2) { Text(routeManager.isTracking && currentBPM > 0 ? "\(currentBPM)" : "—").font(.system(size: 18, weight: .heavy, design: .monospaced)).foregroundColor(routeManager.isTracking ? .white : .gray); Image(systemName: "heart.fill").foregroundColor(.pink).font(.caption2).scaleEffect(pulse ? 1.2 : 0.9) } }
                         VStack(alignment: .leading, spacing: 2) { Text("ТЕМП").font(.system(size: 8, weight: .bold)).foregroundColor(AppTheme.accentCyan); Text(String(format: "%.1f", routeManager.isTracking ? currentPace : 0.0)).font(.system(size: 18, weight: .heavy, design: .monospaced)).foregroundColor(routeManager.isTracking ? .white : .gray) }
                     }
                     HStack(spacing: 4) { Image(systemName: "bitcoinsign.circle.fill").foregroundColor(AppTheme.gold).font(.system(size: 10)); Text("+\(String(format: "%.2f", minedCrypto))").font(.system(size: 10, weight: .bold)).foregroundColor(AppTheme.gold) }
@@ -194,7 +204,7 @@ struct GPSTabView: View {
             }.padding(.horizontal); Spacer().frame(height: 15)
             
             HStack(spacing: 10) {
-                ForEach(ActivityType.allCases, id: \.self) { type in Button(action: { triggerImpact(); activeActivity = type; withAnimation { routeManager.isTracking = true; isAutoPaused = false; isAnomalyActive = false; currentPace = Double.random(in: 4.0...15.0); currentBPM = Int.random(in: 110...130); minedCrypto = 0 } }) { VStack { Image(systemName: type.icon).font(.title2); Text(type.rawValue).font(.caption2.bold()) }.foregroundColor(activeActivity == type ? .white : .gray).frame(maxWidth: .infinity).padding(.vertical, 12).background(activeActivity == type ? AppTheme.accentBlue : Color.white.opacity(0.1)).cornerRadius(15).shadow(color: activeActivity == type ? AppTheme.accentBlue.opacity(0.6) : .clear, radius: 10) }.buttonStyle(BouncyButton()) }
+                ForEach(ActivityType.allCases, id: \.self) { type in Button(action: { triggerImpact(); activeActivity = type; withAnimation { routeManager.isTracking = true; isAutoPaused = false; isAnomalyActive = false; currentPace = 0.0; currentBPM = 0; minedCrypto = 0 } }) { VStack { Image(systemName: type.icon).font(.title2); Text(type.rawValue).font(.caption2.bold()) }.foregroundColor(activeActivity == type ? .white : .gray).frame(maxWidth: .infinity).padding(.vertical, 12).background(activeActivity == type ? AppTheme.accentBlue : Color.white.opacity(0.1)).cornerRadius(15).shadow(color: activeActivity == type ? AppTheme.accentBlue.opacity(0.6) : .clear, radius: 10) }.buttonStyle(BouncyButton()) }
             }.padding(.horizontal).background(.ultraThinMaterial).cornerRadius(25).padding(.horizontal)
             
             HStack(spacing: 8) {
@@ -214,9 +224,34 @@ struct GPSTabView: View {
             } else { if Int.random(in: 0...100) > 96 && currentPace > 3.0 && !isAutoPaused { triggerImpact(style: .heavy); withAnimation { isAnomalyActive = true; anomalyTimer = 30 } } }
             if Int.random(in: 0...15) == 5 { let w = ["Ветер: 3 м/с 💨", "Связь стабильна 📡", "Сыро 💧", "Магнитная буря ⚡️"]; withAnimation { weatherCondition = w.randomElement()! } }
             if Int.random(in: 0...20) == 5 { let t = ["Нейро-Спутник сзади! 🤖", "Ускоряйся! 👻", "Сигнал в норме 📡", "Не останавливайся! 🏃"]; withAnimation { ghostTaunt = t.randomElement()! } }
-            if Int.random(in: 0...20) == 5 { currentPace = 0.0 } else if currentPace == 0.0 { currentPace = Double.random(in: 4.0...10.0) }
-            
-            if currentPace < 1.0 { isAutoPaused = true; withAnimation { coachMessage = "Система: Вы остановились ⏸️" } } else { isAutoPaused = false; caloriesBurned += (activeActivity.burnRate * comboMultiplier); currentPace += Double.random(in: -0.5...0.5); currentBPM = max(110, min(180, currentBPM + Int.random(in: -3...4))); minedCrypto += (0.01 * comboMultiplier); if currentBPM > 140 { triggerImpact(style: .soft) }; routeManager.addChallengeProgress(amount: (activeActivity.burnRate * comboMultiplier) * 0.1); if Double.random(in: 0...1) > 0.85 { withAnimation { comboMultiplier = min(2.5, comboMultiplier + 0.1) } }; if !isAnomalyActive && Int.random(in: 0...10) > 8 { withAnimation { coachMessage = ["Отличный темп! 🔥", "Блок взломан! 💰", "Комбо растет! ⚡️", "Спутник доволен! 🤖"].randomElement()! } } }
+            // Real-time speed from CoreLocation (m/s -> km/h). Negative
+            // speed means "unknown" per CLLocation docs.
+            let rawSpeed = locManager.location?.speed ?? -1
+            currentPace = rawSpeed > 0 ? rawSpeed * 3.6 : 0.0
+
+            // Real heart rate from HealthKit (Apple Watch / connected
+            // devices). Falls back to 0 (hidden in UI) when unavailable.
+            if let bpm = health.latestHeartRate, bpm > 0 {
+                currentBPM = Int(bpm.rounded())
+            } else {
+                currentBPM = 0
+            }
+
+            if currentPace < 1.0 {
+                isAutoPaused = true
+                withAnimation { coachMessage = "Система: Вы остановились ⏸️" }
+            } else {
+                isAutoPaused = false
+                caloriesBurned += (activeActivity.burnRate * comboMultiplier)
+                minedCrypto += (0.01 * comboMultiplier)
+                if currentBPM > 140 { triggerImpact(style: .soft) }
+                routeManager.addChallengeProgress(
+                    amount: (activeActivity.burnRate * comboMultiplier) * 0.1
+                )
+                if Double.random(in: 0...1) > 0.85 {
+                    withAnimation { comboMultiplier = min(2.5, comboMultiplier + 0.1) }
+                }
+            }
         }
         if routeManager.activeRoute != nil && routeManager.isTracking && !isAutoPaused {
             withAnimation { routeManager.traveledProgress = min(routeManager.traveledProgress + 0.01, 1.0) }

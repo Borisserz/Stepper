@@ -73,13 +73,13 @@ final class AICoachService {
         let ai = FirebaseAI.firebaseAI(backend: .vertexAI())
         let model = ai.generativeModel(
             modelName: "gemini-2.5-flash",
-            systemInstruction: ModelContent(role: "system", parts: [.text(Self.systemPrompt)])
+            systemInstruction: ModelContent(role: "system", parts: [TextPart(Self.systemPrompt)])
         )
 
         // Map our local transcript into Firebase AI ModelContent.
         let contents: [ModelContent] = history.map { turn in
             let role = turn.role == .user ? "user" : "model"
-            return ModelContent(role: role, parts: [.text(turn.text)])
+            return ModelContent(role: role, parts: [TextPart(turn.text)])
         }
 
         do {

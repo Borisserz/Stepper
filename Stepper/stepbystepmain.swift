@@ -1601,11 +1601,17 @@ struct AIChatView: View {
     
     @State private var selectedTab = "Чат"
     @State private var inputText = ""
-    @State private var messages: [ChatMessage] = []
-    
+    @State private var coach = AICoachService.shared
+
     @StateObject private var speech = SpeechManager() // Микрофон чата
-    
+
     let tabs = ["Чат", "История"]
+
+    private var messages: [ChatMessage] {
+        coach.transcript.map { turn in
+            ChatMessage(text: turn.text, isUser: turn.role == .user)
+        }
+    }
     
     var body: some View {
         ZStack {
@@ -1634,9 +1640,27 @@ struct AIChatView: View {
                         ScrollView {
                             LazyVStack(spacing: 15) {
                                 ForEach(messages) { msg in ChatBubble(message: msg) }
+                                if coach.isThinking {
+                                    HStack(spacing: 6) {
+                                        ForEach(0..<3, id: \.self) { i in
+                                            Circle().fill(AppTheme.accentCyan).frame(width: 7, height: 7)
+                                                .opacity(0.55)
+                                                .scaleEffect(coach.isThinking ? 1.0 : 0.6)
+                                                .animation(.easeInOut(duration: 0.6).repeatForever().delay(Double(i) * 0.18), value: coach.isThinking)
+                                        }
+                                    }
+                                    .padding(14)
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 8)
+                                    .id("__thinking")
+                                }
                             }.padding()
                         }
-                        .onChange(of: messages.count) { _, _ in if let last = messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } } }
+                        .onChange(of: coach.transcript.count) { _, _ in if let last = messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } } }
+                        .onChange(of: coach.isThinking) { _, thinking in
+                            if thinking { withAnimation { proxy.scrollTo("__thinking", anchor: .bottom) } }
+                        }
                     }
                     
                     // Обновленное Поле ввода с МИКРОФОНОМ
@@ -1690,19 +1714,17 @@ struct AIChatView: View {
         }
         .onAppear {
             if !initialMessage.isEmpty {
-                messages.append(ChatMessage(text: initialMessage, isUser: true))
+                let starter = initialMessage
                 initialMessage = ""
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { messages.append(ChatMessage(text: "Анализирую ваш запрос... Как кибер-тренер, я готов помочь.", isUser: false)) }
-            } else if messages.isEmpty {
-                messages.append(ChatMessage(text: "Привет! Я твой AI-помощник. Составим план тренировок?", isUser: false))
+                Task { await coach.ask(starter) }
             }
         }
     }
     func sendMessage() {
-        guard !inputText.isEmpty else { return }
-        messages.append(ChatMessage(text: inputText, isUser: true))
+        let prompt = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return }
         inputText = ""
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { messages.append(ChatMessage(text: "Принято. Вношу коррективы в вашу программу.", isUser: false)) }
+        Task { await coach.ask(prompt) }
     }
 }
 
