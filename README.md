@@ -97,7 +97,7 @@ This project strictly adheres to modern Apple development paradigms, prioritizin
 
 ## 🚀 Installation & Setup
 
-You will need **macOS Sequoia** (15) and **Xcode 16+**. The deployment target is **iOS 17.0**, so any iPhone or iPad on iOS 17 or later will run the app.
+You will need **macOS Sequoia** (15) and **Xcode 26+** (the project uses Swift 6.2 features such as `SWIFT_APPROACHABLE_CONCURRENCY` and the `MainActor` default isolation). The deployment target is **iOS 17.0**, so any iPhone or iPad on iOS 17 or later will run the app.
 
 1. **Clone the repository:**
 
