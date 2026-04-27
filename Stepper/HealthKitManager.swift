@@ -22,6 +22,11 @@ final class HealthKitManager {
     private(set) var todaySteps: Double?
     /// Total walking + running distance today (metres), or `nil` if unknown.
     private(set) var todayDistanceMeters: Double?
+    /// Active energy burned today (kcal), or `nil` if unknown.
+    private(set) var todayActiveKilocalories: Double?
+    /// Apple Exercise minutes today, or `nil` if unknown. iOS counts a
+    /// minute when the user moves at brisk-walk intensity or above.
+    private(set) var todayExerciseMinutes: Double?
     /// Most recent heart-rate sample (BPM), or `nil` if unknown.
     private(set) var latestHeartRate: Double?
     /// Last error message surfaced to the UI.
@@ -44,6 +49,8 @@ final class HealthKitManager {
         if let steps = HKObjectType.quantityType(forIdentifier: .stepCount) { types.insert(steps) }
         if let distance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning) { types.insert(distance) }
         if let hr = HKObjectType.quantityType(forIdentifier: .heartRate) { types.insert(hr) }
+        if let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) { types.insert(energy) }
+        if let exercise = HKObjectType.quantityType(forIdentifier: .appleExerciseTime) { types.insert(exercise) }
         return types
     }
 
@@ -82,6 +89,8 @@ final class HealthKitManager {
             group.addTask { await self.refreshSteps() }
             group.addTask { await self.refreshDistance() }
             group.addTask { await self.refreshHeartRate() }
+            group.addTask { await self.refreshActiveEnergy() }
+            group.addTask { await self.refreshExerciseTime() }
         }
     }
 
@@ -105,6 +114,20 @@ final class HealthKitManager {
         guard let type = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         if let bpm = await mostRecentHeartRate(type: type) {
             self.latestHeartRate = bpm
+        }
+    }
+
+    private func refreshActiveEnergy() async {
+        guard let type = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) else { return }
+        if let total = await sumQuantityToday(type: type, unit: .kilocalorie()) {
+            self.todayActiveKilocalories = total
+        }
+    }
+
+    private func refreshExerciseTime() async {
+        guard let type = HKObjectType.quantityType(forIdentifier: .appleExerciseTime) else { return }
+        if let total = await sumQuantityToday(type: type, unit: .minute()) {
+            self.todayExerciseMinutes = total
         }
     }
 

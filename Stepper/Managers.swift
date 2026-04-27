@@ -6,12 +6,19 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     @Published var location: CLLocation?
     @Published var isAuthorized = false
+    /// Raw CLAuthorizationStatus so the UI can distinguish "not yet asked"
+    /// (`.notDetermined`) from "user actively denied" (`.denied` /
+    /// `.restricted`) and show different empty-states accordingly.
+    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     override init() {
         super.init()
         manager.delegate = self; manager.desiredAccuracy = kCLLocationAccuracyBest; manager.distanceFilter = 10
+        authorizationStatus = manager.authorizationStatus
+        isAuthorized = (authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways)
     }
     func requestAuth() { manager.requestWhenInUseAuthorization() }
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        authorizationStatus = status
         if status == .authorizedWhenInUse || status == .authorizedAlways { isAuthorized = true; manager.startUpdatingLocation() } else { isAuthorized = false }
     }
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {

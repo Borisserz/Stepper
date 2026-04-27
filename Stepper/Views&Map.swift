@@ -9,7 +9,7 @@ struct GPSTabView: View {
     
     @State private var sway = false; @State private var pulse = false; @State private var reflection = -1.0
     @State private var points = 1250; @State private var activeActivity: ActivityType = .walk
-    @State private var caloriesBurned: Double = 0.0; @State private var currentPace = 0.0; @State private var currentBPM = 80
+    @State private var caloriesBurned: Double = 0.0; @State private var currentPace = 0.0; @State private var currentBPM = 0
     @State private var comboMultiplier = 1.0; @State private var isAutoPaused = false
     
     @State private var isAnomalyActive = false; @State private var anomalyTimer = 0; @State private var minedCrypto = 0.0; @State private var radarSweep = false
